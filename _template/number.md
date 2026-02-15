@@ -10,7 +10,7 @@
 
 ## 数学的性質
 
-- **素因数分解**: {factorization}
+- **素因数分解**: ${factorization}$
 - **各位の和**: {digit_sum}
 - **約数の個数**: {num_divisors}
 - **約数の和**: {sum_divisors}

@@ -1,0 +1,29 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Generate numbers (wikipedia sections)",
+			"type": "shell",
+			"command": "D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe",
+			"args": [
+				"tools/generate_numbers.py",
+				"--wikipedia-sections"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Generate sample (wikipedia sections)",
+			"type": "shell",
+			"command": "D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe",
+			"args": [
+				"tools/generate_numbers.py",
+				"--wikipedia-sections",
+				"--only",
+				"22,31,57,444"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

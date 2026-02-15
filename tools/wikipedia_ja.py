@@ -470,7 +470,9 @@ def load_or_build_wikipedia_property_sentences_for_numbers(
     if refresh:
         to_fetch = list(requested_set)
     else:
-        to_fetch = [n for n in requested_set if n not in cached_all]
+        # 性質セクションは 0..999 全件で取得すると時間がかかりやすい。
+        # 既存キャッシュがある場合はそれを優先し、明示的に refresh が指定されたときだけ取得する。
+        to_fetch = []
 
     if to_fetch:
         for n in sorted(to_fetch):

@@ -36,6 +36,85 @@ def _looks_like_number_wikipedia_intro(intro_extract: str) -> bool:
     return ("自然数" in intro_extract) or ("整数" in intro_extract)
 
 
+def _extract_math_prefix(text: str) -> str | None:
+    """Extract a math-like prefix from a Wikipedia excerpt.
+
+    We do NOT modify the quote itself. Instead, we optionally add a separate
+    KaTeX-formatted line derived from the quote.
+    """
+
+    s = text.strip()
+    if not s:
+        return None
+
+    # Stop before explanatory parentheses.
+    s = s.split("(", 1)[0].split("（", 1)[0].strip()
+    if not s:
+        return None
+
+    def _is_japanese_char(ch: str) -> bool:
+        code = ord(ch)
+        return (
+            (0x3040 <= code <= 0x30FF)  # Hiragana/Katakana
+            or (0x4E00 <= code <= 0x9FFF)  # CJK Unified Ideographs
+        )
+
+    # Build a prefix until we hit Japanese letters or obvious prose markers.
+    # Also avoid capturing a trailing digit that actually belongs to prose, e.g. " 3つ".
+    out: list[str] = []
+    for i, ch in enumerate(s):
+        # Stop at Japanese sentence/phrase delimiters. Do not stop at '.' or ','
+        # because Wikipedia math excerpts often contain decimals.
+        if ch in "。、":
+            break
+        if _is_japanese_char(ch):
+            break
+        if ch.isdigit() and i + 1 < len(s) and _is_japanese_char(s[i + 1]):
+            if out and out[-1] == " ":
+                break
+        out.append(ch)
+
+    prefix = "".join(out).strip()
+    if not prefix:
+        return None
+
+    # Avoid cases like "= 0." that are missing the left-hand side.
+    if prefix.startswith("=") or prefix.startswith("＝"):
+        return None
+
+    # Must contain at least one digit and a math signal.
+    if not re.search(r"\d", prefix):
+        return None
+    if not re.search(r"[=^×÷√π]", prefix):
+        return None
+    if len(prefix) < 6:
+        return None
+    return prefix
+
+
+def _to_katex_math(expr: str) -> str:
+    s = expr
+
+    # Normalize characters.
+    s = s.replace("×", r"\times")
+    s = s.replace("÷", r"\div")
+    s = s.replace("π", r"\pi")
+    s = s.replace("…", r"\dots")
+    s = s.replace("−", "-")  # U+2212
+
+    # Root notations seen in Japanese Wikipedia excerpts.
+    # Example: ^3√31 -> \sqrt[3]{31}
+    s = re.sub(r"\^(\d+)√\s*(\d+)", r"\\sqrt[\1]{\2}", s)
+    # Example: √10 -> \sqrt{10}
+    s = re.sub(r"√\s*(\d+)", r"\\sqrt{\1}", s)
+
+    # Use braces for exponents, including negative ones.
+    s = re.sub(r"\^(-?\d+)", r"^{\1}", s)
+
+    # Keep ASCII spaces (KaTeX ignores extra spaces reasonably).
+    return s.strip()
+
+
 ELEMENTS_JA: list[str | None] = [
     None,
     "水素",
@@ -684,8 +763,9 @@ def render_number_page(
 
     reps_lines = "\n".join([f"- **{k}**: `{v}`" for k, v in info.representations.items()])
 
+    factorization_katex = _to_katex_math(info.factorization)
     math_lines: list[str] = [
-        f"- **素因数分解**: {info.factorization}",
+        f"- **素因数分解**: ${factorization_katex}$",
         f"- **各位の和**: {info.digit_sum}",
     ]
 
@@ -783,6 +863,9 @@ def render_number_page(
                 wikipedia_points.append(
                     f"- Wikipedia『性質』より（短い引用）: 「{excerpt}」（出典: https://ja.wikipedia.org/wiki/{n}#%E6%80%A7%E8%B3%AA / CC BY-SA{(' / ' + note) if note else ''}）"
                 )
+                prefix = _extract_math_prefix(excerpt)
+                if prefix:
+                    wikipedia_points.append(f"- 数式（整形）: ${_to_katex_math(prefix)}$（上の引用より）")
 
     other_points: list[str] = []
     if info.atomic_element is not None:
@@ -1082,13 +1165,14 @@ def main() -> None:
             print(f"[warn] Wikipedia intro fetch skipped: {e}")
 
     wikipedia_properties: dict[int, list[str]] | None = None
-    if args.wikipedia_sections and wikipedia_intros is not None and only_numbers is not None:
+    if args.wikipedia_sections and wikipedia_intros is not None:
         try:
             cache_path = ROOT / "tools" / "_cache" / "wikipedia_ja_properties_v1.json"
+            numbers = only_numbers if only_numbers is not None else list(range(1000))
             wikipedia_properties = load_or_build_wikipedia_property_sentences_for_numbers(
                 cache_path=cache_path,
                 refresh=args.refresh_wikipedia_sections,
-                numbers=only_numbers,
+                numbers=numbers,
             )
         except Exception as e:  # noqa: BLE001
             print(f"[warn] Wikipedia section fetch skipped: {e}")
