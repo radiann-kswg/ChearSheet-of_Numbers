@@ -4,7 +4,7 @@
 		{
 			"label": "Generate numbers (wikipedia sections)",
 			"type": "shell",
-			"command": "D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe",
+			"command": "python",
 			"args": [
 				"tools/generate_numbers.py",
 				"--wikipedia-sections"
@@ -15,7 +15,7 @@
 		{
 			"label": "Generate sample (wikipedia sections)",
 			"type": "shell",
-			"command": "D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe",
+			"command": "python",
 			"args": [
 				"tools/generate_numbers.py",
 				"--wikipedia-sections",

@@ -79,6 +79,7 @@
 
 - `numbers/` 配下と `index.md` / `README.md` は、原則として `tools/generate_numbers.py` で生成します。
 - 内容やフォーマットを変更する場合は、個別ファイルを手編集でバラバラにするのではなく、まず生成スクリプト側の更新を優先してください（整合性維持のため）。
+  - `README.md` の文面は `tools/generate_numbers.py` の `render_readme()` から生成されます。
 
 ### 内容の方針（公開に耐えるための注意）
 
@@ -109,12 +110,30 @@
   - `--no-wikipedia`: Wikipedia（日本語）連携を無効化
   - `--refresh-wikipedia`: キャッシュを更新
 
+### Wikipedia（日本語）連携（性質/その他の短い引用抽出）
+
+- `tools/generate_numbers.py` に `--wikipedia-sections` を付けると、Wikipedia の『性質』『その他』セクションから短い引用を抽出して、各ページの `Wikipedia（要点）` に反映します。
+- キャッシュ: `tools/_cache/`（通常はGit管理しない）
+  - `tools/_cache/wikipedia_ja_properties_v1.json`
+  - `tools/_cache/wikipedia_ja_others_v1.json`
+  - 重要度算出用の検索ヒット数キャッシュ: `tools/_cache/wikipedia_ja_searchhits_v1.json`
+- オプション:
+  - `--refresh-wikipedia-sections`: セクションキャッシュを更新
+  - `--offline`: ネットワーク取得を行わずキャッシュのみで生成
+
+#### 採用制御（ハードコード回避）
+
+- 特定の固有名詞を含む引用を優先したい場合はピン留め設定で対応します（本文内の部分一致）
+  - 設定: `tools/wikipedia_ja_pins_v1.json`
+- 重要度（採用閾値）を数字ごと・種別ごとに調整したい場合は上書き設定で対応します
+  - 設定: `tools/wikipedia_ja_importance_overrides_v1.json`
+
 ### 追加・更新時の最低限手順
 
 - 生成コマンド（PowerShell 例）:
 
 ```powershell
-& "D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe" tools/generate_numbers.py
+python tools/generate_numbers.py
 ```
 
 - 更新後は、リポジトリ内の相対リンク（特に `index.md` → `numbers/`）がリンク切れしていないことを確認してください（外部URLは対象外でOK）。
