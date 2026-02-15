@@ -110,6 +110,8 @@ def _to_katex_math(expr: str) -> str:
 
     # Root notations seen in Japanese Wikipedia excerpts.
     # Example: ^3√31 -> \sqrt[3]{31}
+    # IMPORTANT: replacement strings in re.sub treat backslashes specially.
+    # Use double backslash to emit a literal backslash for KaTeX macros.
     s = re.sub(r"\^(\d+)√\s*(\d+)", r"\\sqrt[\1]{\2}", s)
     # Example: √10 -> \sqrt{10}
     s = re.sub(r"√\s*(\d+)", r"\\sqrt{\1}", s)
