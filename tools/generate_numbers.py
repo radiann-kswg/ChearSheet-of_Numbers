@@ -36,19 +36,19 @@ def _looks_like_number_wikipedia_intro(intro_extract: str) -> bool:
     return ("自然数" in intro_extract) or ("整数" in intro_extract)
 
 
-def _extract_math_prefix(text: str) -> str | None:
-    """Extract a math-like prefix from a Wikipedia excerpt.
+def _split_math_prefix(text: str) -> tuple[str, str] | None:
+    """Split a Wikipedia excerpt into (math_like_prefix, remainder).
 
     We do NOT modify the quote itself. Instead, we optionally add a separate
-    KaTeX-formatted line derived from the quote.
+    line that re-states the excerpt with KaTeX formatting.
+
+    Prefix stops at:
+    - Japanese characters
+    - Japanese punctuation (。 、)
+    - Parentheses ( ( / （ ) to keep the math part clean
     """
 
     s = text.strip()
-    if not s:
-        return None
-
-    # Stop before explanatory parentheses.
-    s = s.split("(", 1)[0].split("（", 1)[0].strip()
     if not s:
         return None
 
@@ -59,22 +59,28 @@ def _extract_math_prefix(text: str) -> str | None:
             or (0x4E00 <= code <= 0x9FFF)  # CJK Unified Ideographs
         )
 
-    # Build a prefix until we hit Japanese letters or obvious prose markers.
-    # Also avoid capturing a trailing digit that actually belongs to prose, e.g. " 3つ".
-    out: list[str] = []
+    end = 0
     for i, ch in enumerate(s):
-        # Stop at Japanese sentence/phrase delimiters. Do not stop at '.' or ','
-        # because Wikipedia math excerpts often contain decimals.
-        if ch in "。、":
+        # Stop at delimiters (keep '.'/',' because decimals are common).
+        if ch in "。、(（":
+            end = i
             break
         if _is_japanese_char(ch):
+            end = i
             break
         if ch.isdigit() and i + 1 < len(s) and _is_japanese_char(s[i + 1]):
-            if out and out[-1] == " ":
+            if i > 0 and s[i - 1] == " ":
+                end = i
                 break
-        out.append(ch)
+        end = i + 1
 
-    prefix = "".join(out).strip()
+    # Trim trailing spaces from the prefix but keep remainder intact.
+    prefix_end = end
+    while prefix_end > 0 and s[prefix_end - 1] == " ":
+        prefix_end -= 1
+    prefix = s[:prefix_end]
+    remainder = s[prefix_end:]
+
     if not prefix:
         return None
 
@@ -89,7 +95,7 @@ def _extract_math_prefix(text: str) -> str | None:
         return None
     if len(prefix) < 6:
         return None
-    return prefix
+    return prefix, remainder
 
 
 def _to_katex_math(expr: str) -> str:
@@ -859,13 +865,23 @@ def render_number_page(
                 if len(excerpt) > 140:
                     excerpt = excerpt[:140].rstrip() + "…"
                     omitted = True
-                note = "一部省略" if omitted else ""
-                wikipedia_points.append(
-                    f"- Wikipedia『性質』より（短い引用）: 「{excerpt}」（出典: https://ja.wikipedia.org/wiki/{n}#%E6%80%A7%E8%B3%AA / CC BY-SA{(' / ' + note) if note else ''}）"
-                )
-                prefix = _extract_math_prefix(excerpt)
-                if prefix:
-                    wikipedia_points.append(f"- 数式（整形）: ${_to_katex_math(prefix)}$（上の引用より）")
+                split = _split_math_prefix(excerpt)
+                if split:
+                    prefix, remainder = split
+                    normalized = _to_katex_math(prefix)
+                    formatted_sentence = f"${normalized}${remainder}".strip()
+                    notes: list[str] = ["表記を整形"]
+                    if omitted:
+                        notes.append("一部省略")
+                    note_text = " / " + " / ".join(notes) if notes else ""
+                    wikipedia_points.append(
+                        f"- Wikipedia『性質』より（短い引用・整形）: 「{formatted_sentence}」（出典: https://ja.wikipedia.org/wiki/{n}#%E6%80%A7%E8%B3%AA / CC BY-SA{note_text}）"
+                    )
+                else:
+                    note = "一部省略" if omitted else ""
+                    wikipedia_points.append(
+                        f"- Wikipedia『性質』より（短い引用）: 「{excerpt}」（出典: https://ja.wikipedia.org/wiki/{n}#%E6%80%A7%E8%B3%AA / CC BY-SA{(' / ' + note) if note else ''}）"
+                    )
 
     other_points: list[str] = []
     if info.atomic_element is not None:
