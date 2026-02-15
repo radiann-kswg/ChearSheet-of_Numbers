@@ -1128,6 +1128,11 @@ def write_file(path: Path, content: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate number cheat sheets (0..999).")
     parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Use cache only; do not fetch from Wikipedia/Wikidata over the network.",
+    )
+    parser.add_argument(
         "--no-wikidata",
         action="store_true",
         help="Disable Wikidata(CC0) enrichment.",
@@ -1173,7 +1178,11 @@ def main() -> None:
     if not args.no_wikidata:
         try:
             cache_path = ROOT / "tools" / "_cache" / "wikidata_enrichment_v1.json"
-            wikidata = load_or_build_enrichment(cache_path=cache_path, refresh=args.refresh_wikidata)
+            if args.offline:
+                if cache_path.exists():
+                    wikidata = load_or_build_enrichment(cache_path=cache_path, refresh=False)
+            else:
+                wikidata = load_or_build_enrichment(cache_path=cache_path, refresh=args.refresh_wikidata)
         except Exception as e:  # noqa: BLE001
             print(f"[warn] Wikidata enrichment skipped: {e}")
 
@@ -1185,6 +1194,7 @@ def main() -> None:
                 cache_path=cache_path,
                 refresh=args.refresh_wikipedia,
                 numbers=only_numbers,
+                offline=args.offline,
             )
         except Exception as e:  # noqa: BLE001
             print(f"[warn] Wikipedia intro fetch skipped: {e}")
@@ -1198,6 +1208,7 @@ def main() -> None:
                 cache_path=cache_path,
                 refresh=args.refresh_wikipedia_sections,
                 numbers=numbers,
+                offline=args.offline,
             )
         except Exception as e:  # noqa: BLE001
             print(f"[warn] Wikipedia section fetch skipped: {e}")

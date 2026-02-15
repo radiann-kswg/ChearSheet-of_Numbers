@@ -388,6 +388,7 @@ def load_or_build_wikipedia_intros_for_numbers(
     cache_path: Path,
     refresh: bool,
     numbers: list[int] | None = None,
+    offline: bool = False,
 ) -> dict[int, str]:
     if numbers is None:
         numbers = list(range(1000))
@@ -411,7 +412,9 @@ def load_or_build_wikipedia_intros_for_numbers(
 
     requested_set = set(numbers)
     to_fetch: list[int]
-    if refresh:
+    if offline:
+        to_fetch = []
+    elif refresh:
         to_fetch = list(requested_set)
     else:
         to_fetch = [n for n in requested_set if n not in cached_all]
@@ -445,6 +448,7 @@ def load_or_build_wikipedia_property_sentences_for_numbers(
     cache_path: Path,
     refresh: bool,
     numbers: list[int],
+    offline: bool = False,
 ) -> dict[int, list[str]]:
     cached_all: dict[int, list[str]] = {}
     if cache_path.exists():
@@ -467,7 +471,9 @@ def load_or_build_wikipedia_property_sentences_for_numbers(
 
     requested_set = set(numbers)
     to_fetch: list[int]
-    if refresh:
+    if offline:
+        to_fetch = []
+    elif refresh:
         to_fetch = list(requested_set)
     else:
         to_fetch = [n for n in requested_set if n not in cached_all]
