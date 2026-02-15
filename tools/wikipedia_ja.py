@@ -5,6 +5,7 @@ import json
 import math
 import re
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -64,7 +65,24 @@ def _http_get_json(
             last_err = e
             if attempt >= max_retries:
                 break
-            time.sleep(base_sleep_sec * (2**attempt))
+
+            sleep_sec = base_sleep_sec * (2**attempt)
+            if isinstance(e, urllib.error.HTTPError):
+                if e.code == 429:
+                    retry_after = None
+                    try:
+                        retry_after = e.headers.get("Retry-After")
+                    except Exception:  # noqa: BLE001
+                        retry_after = None
+
+                    if retry_after and str(retry_after).strip().isdigit():
+                        sleep_sec = max(sleep_sec, float(str(retry_after).strip()))
+                    else:
+                        sleep_sec = max(sleep_sec, 30.0)
+                elif e.code in (502, 503, 504):
+                    sleep_sec = max(sleep_sec, 5.0)
+
+            time.sleep(sleep_sec)
 
     raise RuntimeError(f"HTTP GET failed: {full_url} ({last_err})") from last_err
 
@@ -571,6 +589,113 @@ def _select_by_importance(
     kind: str,
     pinned_substrings: list[str] | None = None,
 ) -> list[str]:
+    # NOTE:
+    # "limit" is treated as the *minimum* number of items to include.
+    # If there are 4+ items meeting the importance threshold, we include all of them.
+    if not candidates:
+        return []
+
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for s in candidates:
+        if not isinstance(s, str):
+            continue
+        s2 = _clean_text(s)
+        if not s2 or s2 in seen:
+            continue
+        seen.add(s2)
+        cleaned.append(s2)
+
+    if not cleaned:
+        return []
+
+    pinned_selected: list[str] = []
+    if pinned_substrings:
+        pins = [_clean_text(p) for p in pinned_substrings if isinstance(p, str)]
+        pins = [p for p in pins if p]
+        if pins:
+            used: set[str] = set()
+            for pin in pins:
+                for s in cleaned:
+                    if s in used:
+                        continue
+                    if pin in s:
+                        used.add(s)
+                        pinned_selected.append(s)
+                        # 1 pin -> at most 1 selected line
+                        break
+
+    if pinned_selected:
+        pinned_set = set(pinned_selected)
+        cleaned = [s for s in cleaned if s not in pinned_set]
+
+    if kind == "property":
+        heur = _heuristic_property_score
+    else:
+        heur = _heuristic_other_score
+
+    # Limit expensive search queries per number.
+    ranked_for_search = sorted(cleaned, key=lambda s: (heur(s), len(s)), reverse=True)
+    search_terms: set[str] = set()
+    for s in ranked_for_search[:_MAX_SEARCH_QUERIES_PER_NUMBER]:
+        term = _extract_scoring_term(s)
+        if term:
+            search_terms.add(_clean_text(term))
+
+    scored: list[tuple[int, int, int, int, str]] = []
+    for s in cleaned:
+        term = _extract_scoring_term(s)
+        fame = _estimate_fame_score(
+            term,
+            offline=offline,
+            searchhits_cache=searchhits_cache,
+            allow_fetch=(term is not None and _clean_text(term) in search_terms),
+        )
+        uniq = _estimate_uniqueness_score(term, term_freq)
+        importance = max(1, min(100, fame * uniq))
+        scored.append((importance, fame, uniq, len(s), s))
+
+    scored.sort(key=lambda x: (x[0], x[1], x[2], x[3]), reverse=True)
+
+    preferred = [s for importance, _, _, _, s in scored if importance >= threshold]
+    # If enough items meet the threshold, include *all* of them.
+    if len(preferred) >= limit:
+        return pinned_selected + preferred
+    # Fill with the next best even if below the threshold.
+    out: list[str] = []
+    used: set[str] = set()
+    for s in preferred:
+        if s not in used:
+            used.add(s)
+            out.append(s)
+    for importance, _, _, _, s in scored:
+        if s in used:
+            continue
+        used.add(s)
+        out.append(s)
+        if len(out) >= limit:
+            break
+    return pinned_selected + out
+
+
+def _select_by_importance_legacy(
+    candidates: list[str],
+    *,
+    term_freq: dict[str, int],
+    searchhits_cache: dict[str, int],
+    offline: bool,
+    limit: int,
+    threshold: int,
+    kind: str,
+    pinned_substrings: list[str] | None = None,
+) -> list[str]:
+    """Legacy selection behavior (cap at `limit`).
+
+    - `limit` acts as a hard maximum.
+    - Pins are also capped by `limit`.
+
+    This is kept to allow side-by-side comparison in generated pages.
+    """
     if not candidates:
         return []
 
@@ -618,7 +743,6 @@ def _select_by_importance(
     else:
         heur = _heuristic_other_score
 
-    # Limit expensive search queries per number.
     ranked_for_search = sorted(cleaned, key=lambda s: (heur(s), len(s)), reverse=True)
     search_terms: set[str] = set()
     for s in ranked_for_search[:_MAX_SEARCH_QUERIES_PER_NUMBER]:
@@ -644,21 +768,284 @@ def _select_by_importance(
     preferred = [s for importance, _, _, _, s in scored if importance >= threshold]
     if len(preferred) >= limit:
         return pinned_selected + preferred[: (limit - len(pinned_selected))]
-    # Fill with the next best even if below the threshold.
+
     out: list[str] = []
     used: set[str] = set()
     for s in preferred:
         if s not in used:
             used.add(s)
             out.append(s)
-    for importance, _, _, _, s in scored:
+    for _, _, _, _, s in scored:
         if s in used:
             continue
         used.add(s)
         out.append(s)
         if len(out) >= limit:
             break
+
     return pinned_selected + out[: (limit - len(pinned_selected))]
+
+
+def load_or_build_wikipedia_property_sentence_sets_for_numbers(
+    cache_path: Path,
+    refresh: bool,
+    numbers: list[int],
+    offline: bool = False,
+) -> tuple[dict[int, list[str]], dict[int, list[str]]]:
+    """Return (current, legacy) selections for Wikipedia '性質' essences."""
+    cached_all: dict[int, list[str]] = {}
+    cached_legacy: dict[int, list[str]] = {}
+    if cache_path.exists():
+        try:
+            raw = json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception:
+            raw = {}
+        items = raw.get("properties", {})
+        if isinstance(items, dict):
+            for k, v in items.items():
+                try:
+                    n = int(k)
+                except ValueError:
+                    continue
+                if not isinstance(v, list):
+                    continue
+                lines = [s for s in v if isinstance(s, str) and s.strip()]
+                if lines:
+                    cached_all[n] = lines
+
+        legacy_items = raw.get("properties_legacy", {})
+        if isinstance(legacy_items, dict):
+            for k, v in legacy_items.items():
+                try:
+                    n = int(k)
+                except ValueError:
+                    continue
+                if not isinstance(v, list):
+                    continue
+                lines = [s for s in v if isinstance(s, str) and s.strip()]
+                if lines:
+                    cached_legacy[n] = lines
+
+    requested_set = set(numbers)
+    to_fetch: list[int]
+    if offline:
+        to_fetch = []
+    elif refresh:
+        to_fetch = list(requested_set)
+    else:
+        missing_any = [n for n in requested_set if (n not in cached_all) or (n not in cached_legacy)]
+        to_fetch = missing_any
+
+    if to_fetch:
+        searchhits_cache_path = cache_path.parent / "wikipedia_ja_searchhits_v1.json"
+        searchhits_cache = _load_searchhits_cache(searchhits_cache_path)
+
+        pins_path = cache_path.parent.parent / "wikipedia_ja_pins_v1.json"
+        pins_config = _load_pins_config(pins_path)
+
+        overrides_path = cache_path.parent.parent / "wikipedia_ja_importance_overrides_v1.json"
+        threshold_overrides = _load_threshold_overrides_config(overrides_path)
+
+        term_freq = _build_term_frequency_from_items(cached_all)
+        fetched_candidates: dict[int, list[str]] = {}
+
+        for n in sorted(to_fetch):
+            title = str(n)
+            try:
+                candidates = extract_property_candidate_sentences_from_title(title)
+            except Exception:
+                candidates = []
+            if candidates:
+                fetched_candidates[n] = candidates
+                for s in candidates:
+                    term = _extract_scoring_term(s)
+                    if term:
+                        t = _clean_text(term)
+                        if t:
+                            term_freq[t] = term_freq.get(t, 0) + 1
+            time.sleep(0.2)
+
+        for n, candidates in fetched_candidates.items():
+            pinned = pins_config.get(n, {}).get("property")
+            threshold = threshold_overrides.get(n, {}).get("property", _IMPORTANCE_THRESHOLD)
+
+            selected_current = _select_by_importance(
+                candidates,
+                term_freq=term_freq,
+                searchhits_cache=searchhits_cache,
+                offline=offline,
+                limit=3,
+                threshold=threshold,
+                kind="property",
+                pinned_substrings=pinned,
+            )
+            if selected_current:
+                cached_all[n] = selected_current
+
+            selected_legacy = _select_by_importance_legacy(
+                candidates,
+                term_freq=term_freq,
+                searchhits_cache=searchhits_cache,
+                offline=offline,
+                limit=3,
+                threshold=threshold,
+                kind="property",
+                pinned_substrings=pinned,
+            )
+            if selected_legacy:
+                cached_legacy[n] = selected_legacy
+
+        if not offline:
+            _save_searchhits_cache(searchhits_cache_path, searchhits_cache)
+
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "meta": {"generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
+                    "properties": {str(k): v for k, v in sorted(cached_all.items())},
+                    "properties_legacy": {str(k): v for k, v in sorted(cached_legacy.items())},
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    cur = {n: cached_all[n] for n in numbers if n in cached_all}
+    legacy = {n: cached_legacy[n] for n in numbers if n in cached_legacy}
+    return cur, legacy
+
+
+def load_or_build_wikipedia_other_item_sets_for_numbers(
+    cache_path: Path,
+    refresh: bool,
+    numbers: list[int],
+    offline: bool = False,
+) -> tuple[dict[int, list[str]], dict[int, list[str]]]:
+    """Return (current, legacy) selections for Wikipedia 'その他' essences."""
+    cached_all: dict[int, list[str]] = {}
+    cached_legacy: dict[int, list[str]] = {}
+    if cache_path.exists():
+        try:
+            raw = json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception:
+            raw = {}
+        items = raw.get("others", {})
+        if isinstance(items, dict):
+            for k, v in items.items():
+                try:
+                    n = int(k)
+                except ValueError:
+                    continue
+                if not isinstance(v, list):
+                    continue
+                lines = [s for s in v if isinstance(s, str) and s.strip()]
+                if lines:
+                    cached_all[n] = lines
+
+        legacy_items = raw.get("others_legacy", {})
+        if isinstance(legacy_items, dict):
+            for k, v in legacy_items.items():
+                try:
+                    n = int(k)
+                except ValueError:
+                    continue
+                if not isinstance(v, list):
+                    continue
+                lines = [s for s in v if isinstance(s, str) and s.strip()]
+                if lines:
+                    cached_legacy[n] = lines
+
+    requested_set = set(numbers)
+    to_fetch: list[int]
+    if offline:
+        to_fetch = []
+    elif refresh:
+        to_fetch = list(requested_set)
+    else:
+        missing_any = [n for n in requested_set if (n not in cached_all) or (n not in cached_legacy)]
+        to_fetch = missing_any
+
+    if to_fetch:
+        searchhits_cache_path = cache_path.parent / "wikipedia_ja_searchhits_v1.json"
+        searchhits_cache = _load_searchhits_cache(searchhits_cache_path)
+
+        pins_path = cache_path.parent.parent / "wikipedia_ja_pins_v1.json"
+        pins_config = _load_pins_config(pins_path)
+
+        overrides_path = cache_path.parent.parent / "wikipedia_ja_importance_overrides_v1.json"
+        threshold_overrides = _load_threshold_overrides_config(overrides_path)
+
+        term_freq = _build_term_frequency_from_items(cached_all)
+        fetched_candidates: dict[int, list[str]] = {}
+
+        for n in sorted(to_fetch):
+            title = str(n)
+            try:
+                candidates = extract_other_candidate_items_from_title(title)
+            except Exception:
+                candidates = []
+            if candidates:
+                fetched_candidates[n] = candidates
+                for s in candidates:
+                    term = _extract_scoring_term(s)
+                    if term:
+                        t = _clean_text(term)
+                        if t:
+                            term_freq[t] = term_freq.get(t, 0) + 1
+            time.sleep(0.2)
+
+        for n, candidates in fetched_candidates.items():
+            pinned = pins_config.get(n, {}).get("other")
+            threshold = threshold_overrides.get(n, {}).get("other", _IMPORTANCE_THRESHOLD)
+
+            selected_current = _select_by_importance(
+                candidates,
+                term_freq=term_freq,
+                searchhits_cache=searchhits_cache,
+                offline=offline,
+                limit=3,
+                threshold=threshold,
+                kind="other",
+                pinned_substrings=pinned,
+            )
+            if selected_current:
+                cached_all[n] = selected_current
+
+            selected_legacy = _select_by_importance_legacy(
+                candidates,
+                term_freq=term_freq,
+                searchhits_cache=searchhits_cache,
+                offline=offline,
+                limit=3,
+                threshold=threshold,
+                kind="other",
+                pinned_substrings=pinned,
+            )
+            if selected_legacy:
+                cached_legacy[n] = selected_legacy
+
+        if not offline:
+            _save_searchhits_cache(searchhits_cache_path, searchhits_cache)
+
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "meta": {"generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
+                    "others": {str(k): v for k, v in sorted(cached_all.items())},
+                    "others_legacy": {str(k): v for k, v in sorted(cached_legacy.items())},
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    cur = {n: cached_all[n] for n in numbers if n in cached_all}
+    legacy = {n: cached_legacy[n] for n in numbers if n in cached_legacy}
+    return cur, legacy
 
 
 _PROPERTY_KEYWORDS = [
@@ -1106,96 +1493,13 @@ def load_or_build_wikipedia_property_sentences_for_numbers(
     numbers: list[int],
     offline: bool = False,
 ) -> dict[int, list[str]]:
-    cached_all: dict[int, list[str]] = {}
-    if cache_path.exists():
-        try:
-            raw = json.loads(cache_path.read_text(encoding="utf-8"))
-        except Exception:
-            raw = {}
-        items = raw.get("properties", {})
-        if isinstance(items, dict):
-            for k, v in items.items():
-                try:
-                    n = int(k)
-                except ValueError:
-                    continue
-                if not isinstance(v, list):
-                    continue
-                lines = [s for s in v if isinstance(s, str) and s.strip()]
-                if lines:
-                    cached_all[n] = lines
-
-    requested_set = set(numbers)
-    to_fetch: list[int]
-    if offline:
-        to_fetch = []
-    elif refresh:
-        to_fetch = list(requested_set)
-    else:
-        to_fetch = [n for n in requested_set if n not in cached_all]
-
-    if to_fetch:
-        searchhits_cache_path = cache_path.parent / "wikipedia_ja_searchhits_v1.json"
-        searchhits_cache = _load_searchhits_cache(searchhits_cache_path)
-
-        pins_path = cache_path.parent.parent / "wikipedia_ja_pins_v1.json"
-        pins_config = _load_pins_config(pins_path)
-
-        overrides_path = cache_path.parent.parent / "wikipedia_ja_importance_overrides_v1.json"
-        threshold_overrides = _load_threshold_overrides_config(overrides_path)
-
-        term_freq = _build_term_frequency_from_items(cached_all)
-        fetched_candidates: dict[int, list[str]] = {}
-
-        for n in sorted(to_fetch):
-            title = str(n)
-            try:
-                candidates = extract_property_candidate_sentences_from_title(title)
-            except Exception:
-                candidates = []
-            if candidates:
-                fetched_candidates[n] = candidates
-                for s in candidates:
-                    term = _extract_scoring_term(s)
-                    if term:
-                        t = _clean_text(term)
-                        if t:
-                            term_freq[t] = term_freq.get(t, 0) + 1
-            time.sleep(0.2)
-
-        for n, candidates in fetched_candidates.items():
-            pinned = pins_config.get(n, {}).get("property")
-            threshold = threshold_overrides.get(n, {}).get("property", _IMPORTANCE_THRESHOLD)
-            selected = _select_by_importance(
-                candidates,
-                term_freq=term_freq,
-                searchhits_cache=searchhits_cache,
-                offline=offline,
-                limit=3,
-                threshold=threshold,
-                kind="property",
-                pinned_substrings=pinned,
-            )
-            if selected:
-                cached_all[n] = selected
-
-        if not offline:
-            _save_searchhits_cache(searchhits_cache_path, searchhits_cache)
-
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(
-            json.dumps(
-                {
-                    "meta": {"generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
-                    "properties": {str(k): v for k, v in sorted(cached_all.items())},
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-
-    return {n: cached_all[n] for n in numbers if n in cached_all}
+    cur, _legacy = load_or_build_wikipedia_property_sentence_sets_for_numbers(
+        cache_path=cache_path,
+        refresh=refresh,
+        numbers=numbers,
+        offline=offline,
+    )
+    return cur
 
 
 def load_or_build_wikipedia_other_items_for_numbers(
@@ -1204,93 +1508,10 @@ def load_or_build_wikipedia_other_items_for_numbers(
     numbers: list[int],
     offline: bool = False,
 ) -> dict[int, list[str]]:
-    cached_all: dict[int, list[str]] = {}
-    if cache_path.exists():
-        try:
-            raw = json.loads(cache_path.read_text(encoding="utf-8"))
-        except Exception:
-            raw = {}
-        items = raw.get("others", {})
-        if isinstance(items, dict):
-            for k, v in items.items():
-                try:
-                    n = int(k)
-                except ValueError:
-                    continue
-                if not isinstance(v, list):
-                    continue
-                lines = [s for s in v if isinstance(s, str) and s.strip()]
-                if lines:
-                    cached_all[n] = lines
-
-    requested_set = set(numbers)
-    to_fetch: list[int]
-    if offline:
-        to_fetch = []
-    elif refresh:
-        to_fetch = list(requested_set)
-    else:
-        to_fetch = [n for n in requested_set if n not in cached_all]
-
-    if to_fetch:
-        searchhits_cache_path = cache_path.parent / "wikipedia_ja_searchhits_v1.json"
-        searchhits_cache = _load_searchhits_cache(searchhits_cache_path)
-
-        pins_path = cache_path.parent.parent / "wikipedia_ja_pins_v1.json"
-        pins_config = _load_pins_config(pins_path)
-
-        overrides_path = cache_path.parent.parent / "wikipedia_ja_importance_overrides_v1.json"
-        threshold_overrides = _load_threshold_overrides_config(overrides_path)
-
-        term_freq = _build_term_frequency_from_items(cached_all)
-        fetched_candidates: dict[int, list[str]] = {}
-
-        for n in sorted(to_fetch):
-            title = str(n)
-            try:
-                candidates = extract_other_candidate_items_from_title(title)
-            except Exception:
-                candidates = []
-            if candidates:
-                fetched_candidates[n] = candidates
-                for s in candidates:
-                    term = _extract_scoring_term(s)
-                    if term:
-                        t = _clean_text(term)
-                        if t:
-                            term_freq[t] = term_freq.get(t, 0) + 1
-            time.sleep(0.2)
-
-        for n, candidates in fetched_candidates.items():
-            pinned = pins_config.get(n, {}).get("other")
-            threshold = threshold_overrides.get(n, {}).get("other", _IMPORTANCE_THRESHOLD)
-            selected = _select_by_importance(
-                candidates,
-                term_freq=term_freq,
-                searchhits_cache=searchhits_cache,
-                offline=offline,
-                limit=3,
-                threshold=threshold,
-                kind="other",
-                pinned_substrings=pinned,
-            )
-            if selected:
-                cached_all[n] = selected
-
-        if not offline:
-            _save_searchhits_cache(searchhits_cache_path, searchhits_cache)
-
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(
-            json.dumps(
-                {
-                    "meta": {"generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
-                    "others": {str(k): v for k, v in sorted(cached_all.items())},
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-
-    return {n: cached_all[n] for n in numbers if n in cached_all}
+    cur, _legacy = load_or_build_wikipedia_other_item_sets_for_numbers(
+        cache_path=cache_path,
+        refresh=refresh,
+        numbers=numbers,
+        offline=offline,
+    )
+    return cur

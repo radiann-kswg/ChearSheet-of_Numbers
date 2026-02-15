@@ -11,9 +11,9 @@ import re
 from wikidata_cc0 import WikidataEnrichment, load_or_build_enrichment
 from wikipedia_ja import (
     extract_wikipedia_facts,
-    load_or_build_wikipedia_other_items_for_numbers,
     load_or_build_wikipedia_intros_for_numbers,
-    load_or_build_wikipedia_property_sentences_for_numbers,
+    load_or_build_wikipedia_other_item_sets_for_numbers,
+    load_or_build_wikipedia_property_sentence_sets_for_numbers,
 )
 
 
@@ -738,9 +738,28 @@ def render_number_page(
     wikidata: WikidataEnrichment | None,
     wikipedia_intros: dict[int, str] | None,
     wikipedia_properties: dict[int, list[str]] | None,
+    wikipedia_properties_legacy: dict[int, list[str]] | None,
     wikipedia_other_items: dict[int, list[str]] | None,
+    wikipedia_other_items_legacy: dict[int, list[str]] | None,
 ) -> str:
     n = info.n
+
+    def _merge_current_legacy(
+        current: list[str] | None,
+        legacy: list[str] | None,
+    ) -> list[str]:
+        cur = [s for s in (current or []) if isinstance(s, str) and s.strip()]
+        leg = [s for s in (legacy or []) if isinstance(s, str) and s.strip()]
+        if not cur and not leg:
+            return []
+        cur_set = set(cur)
+        out: list[str] = []
+        out.extend(cur)
+        for s in leg:
+            if s in cur_set:
+                continue
+            out.append(s)
+        return out
     prev_path = number_file_path(n - 1) if n > 0 else None
     next_path = number_file_path(n + 1) if n < 999 else None
 
@@ -865,9 +884,12 @@ def render_number_page(
             for t in shown_terms:
                 wikipedia_points.append(f"- {t}（Wikipedia参照）")
 
-        props = (wikipedia_properties or {}).get(n)
-        if isinstance(props, list) and props:
-            for s in props[:3]:
+        props_pairs = _merge_current_legacy(
+            (wikipedia_properties or {}).get(n),
+            (wikipedia_properties_legacy or {}).get(n),
+        )
+        if props_pairs:
+            for s in props_pairs:
                 if not isinstance(s, str) or not s.strip():
                     continue
                 excerpt = s.strip()
@@ -901,9 +923,12 @@ def render_number_page(
             f"- 原子番号 {n} の元素: {info.atomic_element}（Wikipedia『その他』参照）"
         )
 
-    other_items = (wikipedia_other_items or {}).get(n)
-    if isinstance(other_items, list) and other_items:
-        for s in other_items[:3]:
+    other_pairs = _merge_current_legacy(
+        (wikipedia_other_items or {}).get(n),
+        (wikipedia_other_items_legacy or {}).get(n),
+    )
+    if other_pairs:
+        for s in other_pairs:
             if not isinstance(s, str) or not s.strip():
                 continue
             excerpt = s.strip()
@@ -1274,16 +1299,20 @@ def main() -> None:
             print(f"[warn] Wikipedia intro fetch skipped: {e}")
 
     wikipedia_properties: dict[int, list[str]] | None = None
+    wikipedia_properties_legacy: dict[int, list[str]] | None = None
     wikipedia_other_items: dict[int, list[str]] | None = None
-    if args.wikipedia_sections and wikipedia_intros is not None:
+    wikipedia_other_items_legacy: dict[int, list[str]] | None = None
+    if args.wikipedia_sections:
         try:
             cache_path = ROOT / "tools" / "_cache" / "wikipedia_ja_properties_v1.json"
             numbers = only_numbers if only_numbers is not None else list(range(1000))
-            wikipedia_properties = load_or_build_wikipedia_property_sentences_for_numbers(
+            wikipedia_properties, wikipedia_properties_legacy = (
+                load_or_build_wikipedia_property_sentence_sets_for_numbers(
                 cache_path=cache_path,
                 refresh=args.refresh_wikipedia_sections,
                 numbers=numbers,
                 offline=args.offline,
+                )
             )
         except Exception as e:  # noqa: BLE001
             print(f"[warn] Wikipedia section fetch skipped: {e}")
@@ -1291,11 +1320,13 @@ def main() -> None:
         try:
             cache_path = ROOT / "tools" / "_cache" / "wikipedia_ja_others_v1.json"
             numbers = only_numbers if only_numbers is not None else list(range(1000))
-            wikipedia_other_items = load_or_build_wikipedia_other_items_for_numbers(
+            wikipedia_other_items, wikipedia_other_items_legacy = (
+                load_or_build_wikipedia_other_item_sets_for_numbers(
                 cache_path=cache_path,
                 refresh=args.refresh_wikipedia_sections,
                 numbers=numbers,
                 offline=args.offline,
+                )
             )
         except Exception as e:  # noqa: BLE001
             print(f"[warn] Wikipedia other section fetch skipped: {e}")
@@ -1311,7 +1342,15 @@ def main() -> None:
         info = build_info(n)
         write_file(
             number_file_path(n),
-            render_number_page(info, wikidata, wikipedia_intros, wikipedia_properties, wikipedia_other_items),
+            render_number_page(
+                info,
+                wikidata,
+                wikipedia_intros,
+                wikipedia_properties,
+                wikipedia_properties_legacy,
+                wikipedia_other_items,
+                wikipedia_other_items_legacy,
+            ),
         )
 
     # Entry points

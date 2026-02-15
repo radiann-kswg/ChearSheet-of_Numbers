@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -78,7 +79,24 @@ def _http_get_json(
             last_err = e
             if attempt >= max_retries:
                 break
-            time.sleep(base_sleep_sec * (2**attempt))
+
+            sleep_sec = base_sleep_sec * (2**attempt)
+            if isinstance(e, urllib.error.HTTPError):
+                if e.code == 429:
+                    retry_after = None
+                    try:
+                        retry_after = e.headers.get("Retry-After")
+                    except Exception:  # noqa: BLE001
+                        retry_after = None
+
+                    if retry_after and str(retry_after).strip().isdigit():
+                        sleep_sec = max(sleep_sec, float(str(retry_after).strip()))
+                    else:
+                        sleep_sec = max(sleep_sec, 30.0)
+                elif e.code in (502, 503, 504):
+                    sleep_sec = max(sleep_sec, 5.0)
+
+            time.sleep(sleep_sec)
 
     raise RuntimeError(f"HTTP GET failed: {full_url} ({last_err})") from last_err
 
