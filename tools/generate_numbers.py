@@ -5,9 +5,14 @@ import math
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import re
 
 from wikidata_cc0 import WikidataEnrichment, load_or_build_enrichment
-from wikipedia_ja import extract_wikipedia_facts, load_or_build_wikipedia_intros_for_numbers
+from wikipedia_ja import (
+    extract_wikipedia_facts,
+    load_or_build_wikipedia_intros_for_numbers,
+    load_or_build_wikipedia_property_sentences_for_numbers,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -590,6 +595,33 @@ def rel_link(from_path: Path, to_path: Path) -> str:
     return Path(os.path.relpath(to_path, start=from_path.parent)).as_posix()
 
 
+def parse_only_numbers(spec: str) -> list[int]:
+    # Examples: "444" / "0-99" / "444,42,100-120"
+    spec = spec.strip()
+    if not spec:
+        raise ValueError("empty spec")
+
+    out: set[int] = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            a, b = part.split("-", 1)
+            start = int(a.strip())
+            end = int(b.strip())
+            if start > end:
+                start, end = end, start
+            for n in range(start, end + 1):
+                if 0 <= n <= 999:
+                    out.add(n)
+        else:
+            n = int(part)
+            if 0 <= n <= 999:
+                out.add(n)
+    return sorted(out)
+
+
 def number_file_path(n: int) -> Path:
     folder = f"{n // 100}xx"
     return NUMBERS_DIR / folder / f"{n:03d}.md"
@@ -609,6 +641,7 @@ def render_number_page(
     info: NumberInfo,
     wikidata: WikidataEnrichment | None,
     wikipedia_intros: dict[int, str] | None,
+    wikipedia_properties: dict[int, list[str]] | None,
 ) -> str:
     n = info.n
     prev_path = number_file_path(n - 1) if n > 0 else None
@@ -733,6 +766,23 @@ def render_number_page(
             shown_terms = [t for t in terms if isinstance(t, str) and t not in skip_terms][:5]
             for t in shown_terms:
                 wikipedia_points.append(f"- {t}（Wikipedia参照）")
+
+        props = (wikipedia_properties or {}).get(n)
+        if isinstance(props, list) and props:
+            for s in props[:3]:
+                if not isinstance(s, str) or not s.strip():
+                    continue
+                excerpt = s.strip()
+                excerpt = re.sub(r"^\(\s*\)\s*", "", excerpt)
+                excerpt = re.sub(r"^[（(]\s*[0-9一二三四五六七八九十]*\s*[)）]\s*", "", excerpt)
+                omitted = False
+                if len(excerpt) > 140:
+                    excerpt = excerpt[:140].rstrip() + "…"
+                    omitted = True
+                note = "一部省略" if omitted else ""
+                wikipedia_points.append(
+                    f"- Wikipedia『性質』より（短い引用）: 「{excerpt}」（出典: https://ja.wikipedia.org/wiki/{n}#%E6%80%A7%E8%B3%AA / CC BY-SA{(' / ' + note) if note else ''}）"
+                )
 
     other_points: list[str] = []
     if info.atomic_element is not None:
@@ -989,7 +1039,27 @@ def main() -> None:
         action="store_true",
         help="Refresh Japanese Wikipedia cache (tools/_cache).",
     )
+    parser.add_argument(
+        "--wikipedia-sections",
+        action="store_true",
+        help="Fetch Japanese Wikipedia section text (e.g., 性質) to extract non-trivial properties.",
+    )
+    parser.add_argument(
+        "--refresh-wikipedia-sections",
+        action="store_true",
+        help="Refresh Japanese Wikipedia section cache (tools/_cache).",
+    )
+    parser.add_argument(
+        "--only",
+        type=str,
+        default="",
+        help="Generate only specified numbers: e.g. '444' or '0-99' or '444,42,100-120'.",
+    )
     args = parser.parse_args()
+
+    only_numbers: list[int] | None = None
+    if args.only:
+        only_numbers = parse_only_numbers(args.only)
 
     wikidata: WikidataEnrichment | None = None
     if not args.no_wikidata:
@@ -1006,9 +1076,22 @@ def main() -> None:
             wikipedia_intros = load_or_build_wikipedia_intros_for_numbers(
                 cache_path=cache_path,
                 refresh=args.refresh_wikipedia,
+                numbers=only_numbers,
             )
         except Exception as e:  # noqa: BLE001
             print(f"[warn] Wikipedia intro fetch skipped: {e}")
+
+    wikipedia_properties: dict[int, list[str]] | None = None
+    if args.wikipedia_sections and wikipedia_intros is not None and only_numbers is not None:
+        try:
+            cache_path = ROOT / "tools" / "_cache" / "wikipedia_ja_properties_v1.json"
+            wikipedia_properties = load_or_build_wikipedia_property_sentences_for_numbers(
+                cache_path=cache_path,
+                refresh=args.refresh_wikipedia_sections,
+                numbers=only_numbers,
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[warn] Wikipedia section fetch skipped: {e}")
 
     # Ensure base directories
     NUMBERS_DIR.mkdir(parents=True, exist_ok=True)
@@ -1016,9 +1099,13 @@ def main() -> None:
         (NUMBERS_DIR / f"{h}xx").mkdir(parents=True, exist_ok=True)
 
     # Generate pages
-    for n in range(1000):
+    numbers_to_generate = only_numbers if only_numbers is not None else list(range(1000))
+    for n in numbers_to_generate:
         info = build_info(n)
-        write_file(number_file_path(n), render_number_page(info, wikidata, wikipedia_intros))
+        write_file(
+            number_file_path(n),
+            render_number_page(info, wikidata, wikipedia_intros, wikipedia_properties),
+        )
 
     # Entry points
     write_file(ROOT / "index.md", render_index())
