@@ -33,6 +33,10 @@ python tools/generate_numbers.py
 - `python` が見つからない場合: Python 3 をインストールして PATH に追加（Windows なら `py -3` の利用も可）。
 - venv を使う場合（任意）: `python -m venv .venv`
 
+### 相対リンク（リポジトリ内）
+
+各数字ページに `リポジトリ内リンク` を自動出力し、近傍（±1/±10/±100）に移動できる相対リンクを付与します。
+
 ### Wikipedia 引用（性質/その他）
 
 Wikipedia の『性質』『その他』セクションから短い引用を抽出するには `--wikipedia-sections` を指定します。
@@ -45,9 +49,8 @@ python tools/generate_numbers.py --wikipedia-sections
 - ネットワーク無しで生成したい場合: `--offline`（キャッシュのみ使用）
 
 特定の固有名詞を含む引用を優先したい場合は pins 設定で部分一致ピン留めできます:
-
 - pins: `tools/wikipedia_ja_pins_v1.json`
-  重要度の採用閾値を数字ごとに調整したい場合は上書き設定を使います:
+重要度の採用閾値を数字ごとに調整したい場合は上書き設定を使います:
 - overrides: `tools/wikipedia_ja_importance_overrides_v1.json`
 
 Wikidata 連携の制御（任意）:
@@ -63,6 +66,12 @@ Wikipedia（日本語）連携の制御（任意）:
 python tools/generate_numbers.py --no-wikipedia
 python tools/generate_numbers.py --refresh-wikipedia
 ```
+
+### 公開（リリース）
+
+- 生成スクリプト/設定を更新 → `python tools/generate_numbers.py --wikipedia-sections` で全ページ再生成
+- 内部リンクが壊れていないことを確認（例: `python tools/check_internal_links.py`）
+- main に反映後、タグ（例: `vYYYY.MM.DD`）を作成して GitHub Release を作成（差分/変更点を記載）
 
 ## 参考リンク
 

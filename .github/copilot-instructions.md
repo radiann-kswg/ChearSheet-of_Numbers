@@ -137,6 +137,17 @@ python tools/generate_numbers.py
 ```
 
 - 更新後は、リポジトリ内の相対リンク（特に `index.md` → `numbers/`）がリンク切れしていないことを確認してください（外部URLは対象外でOK）。
+  - 検査コマンド（PowerShell 例）:
+
+```powershell
+python tools/check_internal_links.py
+```
+
+### 公開（リリース）
+
+- `tools/` や設定ファイルを更新したら、まずサンプル生成（`--only`）で意図した変更が出ることを確認し、その後に全数生成を行ってください。
+- 全数生成後に `tools/check_internal_links.py` が成功することを確認し、main へ反映します。
+- 公開する場合はタグ（例: `vYYYY.MM.DD`）を作成し、GitHub Release に変更点（要約）を記載します。
 
 ## アンチパターン
 

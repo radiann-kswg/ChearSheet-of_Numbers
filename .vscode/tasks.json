@@ -24,6 +24,16 @@
 			],
 			"isBackground": false,
 			"problemMatcher": []
+		},
+		{
+			"label": "Check internal links",
+			"type": "shell",
+			"command": "python",
+			"args": [
+				"tools/check_internal_links.py"
+			],
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }

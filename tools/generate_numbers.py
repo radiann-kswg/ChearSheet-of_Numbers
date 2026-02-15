@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 import math
 from dataclasses import dataclass
 import os
@@ -722,7 +723,7 @@ def number_file_path(n: int) -> Path:
     return NUMBERS_DIR / folder / f"{n:03d}.md"
 
 
-def _format_wikidata_refs(refs: list[object], limit: int = 10) -> list[str]:
+def _format_wikidata_refs(refs: Sequence[object], limit: int = 10) -> list[str]:
     # `WikidataRef` のように `.label` と `.url` を持つ型を想定
     shown = refs[:limit]
     lines = [f"- {getattr(r, 'label')}（{getattr(r, 'url')}）" for r in shown]
@@ -1023,6 +1024,22 @@ def render_number_page(
     else:
         nav_line = ""
 
+    def _link_cell(num: int) -> str:
+        if not (0 <= num <= 999):
+            return "—"
+        return f"[{num:03d}]({rel_link(here, number_file_path(num))})"
+
+    index_link = f"[index.md]({rel_link(here, ROOT / 'index.md')})"
+    repo_links_lines = [
+        "## リポジトリ内リンク\n",
+        f"- 入口: {index_link}",
+        "",
+        "| -100 | -10 | -1 | +1 | +10 | +100 |",
+        "| --- | --- | --- | --- | --- | --- |",
+        f"| {_link_cell(n-100)} | {_link_cell(n-10)} | {_link_cell(n-1)} | {_link_cell(n+1)} | {_link_cell(n+10)} | {_link_cell(n+100)} |",
+        "",
+    ]
+
     title = f"# {n}（{n:03d}）\n"
 
     return "\n".join(
@@ -1030,6 +1047,7 @@ def render_number_page(
             title,
             nav_line,
             f"> 分類: {' / '.join(category_bits)}\n",
+            *repo_links_lines,
             "## 概要\n",
             f"- **フラグ**: {flag_text}",
             "\n## 数学的性質\n",
@@ -1125,6 +1143,12 @@ def render_readme() -> str:
             "```",
             "",
             "- VS Code を使う場合は、`Terminal: Run Task` から生成タスクを実行できます（`python` が PATH で解決できる前提）。",
+            "- `python` が見つからない場合: Python 3 をインストールして PATH に追加（Windows なら `py -3` の利用も可）。",
+            "- venv を使う場合（任意）: `python -m venv .venv`",
+            "",
+            "### 相対リンク（リポジトリ内）",
+            "",
+            "各数字ページに `リポジトリ内リンク` を自動出力し、近傍（±1/±10/±100）に移動できる相対リンクを付与します。",
             "",
             "### Wikipedia 引用（性質/その他）",
             "",
@@ -1155,6 +1179,12 @@ def render_readme() -> str:
             "python tools/generate_numbers.py --no-wikipedia",
             "python tools/generate_numbers.py --refresh-wikipedia",
             "```",
+            "",
+            "### 公開（リリース）",
+            "",
+            "- 生成スクリプト/設定を更新 → `python tools/generate_numbers.py --wikipedia-sections` で全ページ再生成",
+            "- 内部リンクが壊れていないことを確認（例: `python tools/check_internal_links.py`）",
+            "- main に反映後、タグ（例: `vYYYY.MM.DD`）を作成して GitHub Release を作成（差分/変更点を記載）",
             "",
             "## 参考リンク",
             "",
