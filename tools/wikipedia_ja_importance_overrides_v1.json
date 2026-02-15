@@ -1,0 +1,13 @@
+{
+  "meta": {
+    "version": 1,
+    "note": "重要度指数の閾値を数字ごと・種別(property/other)ごとに上書きします。値は 1..100。未指定は wikipedia_ja.py のデフォルト閾値を使用します。"
+  },
+  "thresholds": {
+    "22": { "property": 20 },
+    "31": { "property": 20 },
+    "42": { "other": 20 },
+    "57": { "property": 20, "other": 20 },
+    "444": { "property": 20 }
+  }
+}

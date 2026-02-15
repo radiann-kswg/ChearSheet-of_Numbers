@@ -114,7 +114,7 @@
 - 生成コマンド（PowerShell 例）:
 
 ```powershell
-"D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe" tools/generate_numbers.py
+& "D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe" tools/generate_numbers.py
 ```
 
 - 更新後は、リポジトリ内の相対リンク（特に `index.md` → `numbers/`）がリンク切れしていないことを確認してください（外部URLは対象外でOK）。

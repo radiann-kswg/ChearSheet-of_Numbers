@@ -10,6 +10,7 @@ import re
 from wikidata_cc0 import WikidataEnrichment, load_or_build_enrichment
 from wikipedia_ja import (
     extract_wikipedia_facts,
+    load_or_build_wikipedia_other_items_for_numbers,
     load_or_build_wikipedia_intros_for_numbers,
     load_or_build_wikipedia_property_sentences_for_numbers,
 )
@@ -736,6 +737,7 @@ def render_number_page(
     wikidata: WikidataEnrichment | None,
     wikipedia_intros: dict[int, str] | None,
     wikipedia_properties: dict[int, list[str]] | None,
+    wikipedia_other_items: dict[int, list[str]] | None,
 ) -> str:
     n = info.n
     prev_path = number_file_path(n - 1) if n > 0 else None
@@ -898,14 +900,35 @@ def render_number_page(
             f"- 原子番号 {n} の元素: {info.atomic_element}（Wikipedia『その他』参照）"
         )
 
-    # 文化的に有名な関連（例）: 42
-    if n == 42:
-        other_points.extend(
-            [
-                "- 『銀河ヒッチハイク・ガイド』に関連して言及されることで有名（要点は Wikipedia 参照）",
-                "- ルイス・キャロルとの関連が挙げられる（詳細は Wikipedia 参照）",
-            ]
-        )
+    other_items = (wikipedia_other_items or {}).get(n)
+    if isinstance(other_items, list) and other_items:
+        for s in other_items[:3]:
+            if not isinstance(s, str) or not s.strip():
+                continue
+            excerpt = s.strip()
+            excerpt = re.sub(r"^\(\s*\)\s*", "", excerpt)
+            excerpt = re.sub(r"^[（(]\s*[0-9一二三四五六七八九十]*\s*[)）]\s*", "", excerpt)
+            omitted = False
+            if len(excerpt) > 160:
+                excerpt = excerpt[:160].rstrip() + "…"
+                omitted = True
+            split = _split_math_prefix(excerpt)
+            if split:
+                prefix, remainder = split
+                normalized = _to_katex_math(prefix)
+                formatted_sentence = f"${normalized}${remainder}".strip()
+                notes: list[str] = ["表記を整形"]
+                if omitted:
+                    notes.append("一部省略")
+                note_text = " / " + " / ".join(notes) if notes else ""
+                other_points.append(
+                    f"- Wikipedia『その他』より（短い引用・整形）: 「{formatted_sentence}」（出典: https://ja.wikipedia.org/wiki/{n}#%E3%81%9D%E3%81%AE%E4%BB%96 / CC BY-SA{note_text}）"
+                )
+            else:
+                note = "一部省略" if omitted else ""
+                other_points.append(
+                    f"- Wikipedia『その他』より（短い引用）: 「{excerpt}」（出典: https://ja.wikipedia.org/wiki/{n}#%E3%81%9D%E3%81%AE%E4%BB%96 / CC BY-SA{(' / ' + note) if note else ''}）"
+                )
 
     if intro_extract and _looks_like_number_wikipedia_intro(intro_extract):
         facts = extract_wikipedia_facts(intro_extract)
@@ -1155,7 +1178,7 @@ def main() -> None:
     parser.add_argument(
         "--wikipedia-sections",
         action="store_true",
-        help="Fetch Japanese Wikipedia section text (e.g., 性質) to extract non-trivial properties.",
+        help="Fetch Japanese Wikipedia section text (e.g., 性質/その他) to extract non-trivial properties and notable associations.",
     )
     parser.add_argument(
         "--refresh-wikipedia-sections",
@@ -1200,6 +1223,7 @@ def main() -> None:
             print(f"[warn] Wikipedia intro fetch skipped: {e}")
 
     wikipedia_properties: dict[int, list[str]] | None = None
+    wikipedia_other_items: dict[int, list[str]] | None = None
     if args.wikipedia_sections and wikipedia_intros is not None:
         try:
             cache_path = ROOT / "tools" / "_cache" / "wikipedia_ja_properties_v1.json"
@@ -1213,6 +1237,18 @@ def main() -> None:
         except Exception as e:  # noqa: BLE001
             print(f"[warn] Wikipedia section fetch skipped: {e}")
 
+        try:
+            cache_path = ROOT / "tools" / "_cache" / "wikipedia_ja_others_v1.json"
+            numbers = only_numbers if only_numbers is not None else list(range(1000))
+            wikipedia_other_items = load_or_build_wikipedia_other_items_for_numbers(
+                cache_path=cache_path,
+                refresh=args.refresh_wikipedia_sections,
+                numbers=numbers,
+                offline=args.offline,
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[warn] Wikipedia other section fetch skipped: {e}")
+
     # Ensure base directories
     NUMBERS_DIR.mkdir(parents=True, exist_ok=True)
     for h in range(10):
@@ -1224,7 +1260,7 @@ def main() -> None:
         info = build_info(n)
         write_file(
             number_file_path(n),
-            render_number_page(info, wikidata, wikipedia_intros, wikipedia_properties),
+            render_number_page(info, wikidata, wikipedia_intros, wikipedia_properties, wikipedia_other_items),
         )
 
     # Entry points
