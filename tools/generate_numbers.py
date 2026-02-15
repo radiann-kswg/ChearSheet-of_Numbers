@@ -7,10 +7,28 @@ import os
 from pathlib import Path
 
 from wikidata_cc0 import WikidataEnrichment, load_or_build_enrichment
+from wikipedia_ja import extract_wikipedia_facts, load_or_build_wikipedia_intros_for_numbers
 
 
 ROOT = Path(__file__).resolve().parents[1]
 NUMBERS_DIR = ROOT / "numbers"
+
+
+def _dedupe_preserve_order(lines: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for line in lines:
+        if line in seen:
+            continue
+        seen.add(line)
+        out.append(line)
+    return out
+
+
+def _looks_like_number_wikipedia_intro(intro_extract: str) -> bool:
+    # 一部の数字は同名の固有名詞等へリダイレクト/曖昧さ回避されうる。
+    # 数の記事の冒頭には「自然数」「整数」等が含まれることが多いので、最低限の安全策として使う。
+    return ("自然数" in intro_extract) or ("整数" in intro_extract)
 
 
 ELEMENTS_JA: list[str | None] = [
@@ -587,7 +605,11 @@ def _format_wikidata_refs(refs: list[object], limit: int = 10) -> list[str]:
     return lines
 
 
-def render_number_page(info: NumberInfo, wikidata: WikidataEnrichment | None) -> str:
+def render_number_page(
+    info: NumberInfo,
+    wikidata: WikidataEnrichment | None,
+    wikipedia_intros: dict[int, str] | None,
+) -> str:
     n = info.n
     prev_path = number_file_path(n - 1) if n > 0 else None
     next_path = number_file_path(n + 1) if n < 999 else None
@@ -680,6 +702,37 @@ def render_number_page(info: NumberInfo, wikidata: WikidataEnrichment | None) ->
         wikipedia_points.append("- 三角数")
     if info.is_fibonacci:
         wikipedia_points.append("- フィボナッチ数")
+    if info.abundance:
+        wikipedia_points.append(f"- {info.abundance}（Wikipedia参照）")
+
+    intro_extract = (wikipedia_intros or {}).get(n)
+    if intro_extract and _looks_like_number_wikipedia_intro(intro_extract):
+        facts = extract_wikipedia_facts(intro_extract)
+        prime_index = facts.get("prime_index")
+        if info.is_prime and isinstance(prime_index, int):
+            wikipedia_points.append(f"- {prime_index}番目の素数として説明される（Wikipedia参照）")
+
+        fib_index = facts.get("fibonacci_index")
+        if info.is_fibonacci and isinstance(fib_index, int):
+            wikipedia_points.append(f"- {fib_index}番目のフィボナッチ数として説明される（Wikipedia参照）")
+
+        tri_index = facts.get("triangular_index")
+        if info.is_triangular and isinstance(tri_index, int):
+            wikipedia_points.append(f"- {tri_index}番目の三角数として説明される（Wikipedia参照）")
+
+        perfect_index = facts.get("perfect_index")
+        if info.abundance == "完全数" and isinstance(perfect_index, int):
+            wikipedia_points.append(f"- {perfect_index}番目の完全数として説明される（Wikipedia参照）")
+
+        terms = facts.get("terms")
+        if isinstance(terms, list):
+            skip_terms: set[str] = set()
+            skip_terms.update(["素数", "合成数", "平方数", "立方数", "三角数", "フィボナッチ数", "メルセンヌ数"])
+            if info.abundance:
+                skip_terms.add(info.abundance)
+            shown_terms = [t for t in terms if isinstance(t, str) and t not in skip_terms][:5]
+            for t in shown_terms:
+                wikipedia_points.append(f"- {t}（Wikipedia参照）")
 
     other_points: list[str] = []
     if info.atomic_element is not None:
@@ -695,6 +748,25 @@ def render_number_page(info: NumberInfo, wikidata: WikidataEnrichment | None) ->
                 "- ルイス・キャロルとの関連が挙げられる（詳細は Wikipedia 参照）",
             ]
         )
+
+    if intro_extract and _looks_like_number_wikipedia_intro(intro_extract):
+        facts = extract_wikipedia_facts(intro_extract)
+        first_sentence = facts.get("first_sentence")
+        if isinstance(first_sentence, str) and first_sentence:
+            # Keep it short: this is a *very* small excerpt.
+            excerpt = first_sentence
+            omitted = False
+            if len(excerpt) > 120:
+                excerpt = excerpt[:120].rstrip() + "…"
+                omitted = True
+            note = "一部省略" if omitted else ""
+            # Attribution + license hint to stay CC BY-SA-friendly.
+            other_points.append(
+                f"- Wikipedia冒頭（短い引用）: 「{excerpt}」（出典: https://ja.wikipedia.org/wiki/{n} / CC BY-SA{(' / ' + note) if note else ''}）"
+            )
+
+    wikipedia_points = _dedupe_preserve_order(wikipedia_points)
+    other_points = _dedupe_preserve_order(other_points)
 
     wikidata_number_lines: list[str] = []
     if wikidata is not None:
@@ -847,6 +919,7 @@ def render_readme() -> str:
             "- 入口: [index.md](index.md)",
             "- 個別ページ: `numbers/` 配下（基本は 1 数字 = 1 ファイル）",
             "- 一部の規格・コード情報は Wikidata（CC0）から自動取得して補強します",
+            "- Wikipedia（日本語）の冒頭（概要）を短く要約して補強します（長文転載はしません）",
             "",
             "## 方針（公開に耐えるための注意）",
             "",
@@ -874,6 +947,13 @@ def render_readme() -> str:
             '"D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe" tools/generate_numbers.py --refresh-wikidata',
             "```",
             "",
+            "Wikipedia（日本語）連携の制御（任意）:",
+            "",
+            "```powershell",
+            '"D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe" tools/generate_numbers.py --no-wikipedia',
+            '"D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe" tools/generate_numbers.py --refresh-wikipedia',
+            "```",
+            "",
             "## 参考リンク",
             "",
             "- Wikipedia 数の記事（例）: https://ja.wikipedia.org/wiki/31",
@@ -899,6 +979,16 @@ def main() -> None:
         action="store_true",
         help="Refresh Wikidata cache (tools/_cache).",
     )
+    parser.add_argument(
+        "--no-wikipedia",
+        action="store_true",
+        help="Disable Japanese Wikipedia intro fetching.",
+    )
+    parser.add_argument(
+        "--refresh-wikipedia",
+        action="store_true",
+        help="Refresh Japanese Wikipedia cache (tools/_cache).",
+    )
     args = parser.parse_args()
 
     wikidata: WikidataEnrichment | None = None
@@ -909,6 +999,17 @@ def main() -> None:
         except Exception as e:  # noqa: BLE001
             print(f"[warn] Wikidata enrichment skipped: {e}")
 
+    wikipedia_intros: dict[int, str] | None = None
+    if not args.no_wikipedia:
+        try:
+            cache_path = ROOT / "tools" / "_cache" / "wikipedia_ja_intros_v1.json"
+            wikipedia_intros = load_or_build_wikipedia_intros_for_numbers(
+                cache_path=cache_path,
+                refresh=args.refresh_wikipedia,
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[warn] Wikipedia intro fetch skipped: {e}")
+
     # Ensure base directories
     NUMBERS_DIR.mkdir(parents=True, exist_ok=True)
     for h in range(10):
@@ -917,7 +1018,7 @@ def main() -> None:
     # Generate pages
     for n in range(1000):
         info = build_info(n)
-        write_file(number_file_path(n), render_number_page(info, wikidata))
+        write_file(number_file_path(n), render_number_page(info, wikidata, wikipedia_intros))
 
     # Entry points
     write_file(ROOT / "index.md", render_index())

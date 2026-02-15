@@ -5,6 +5,7 @@
 - 入口: [index.md](index.md)
 - 個別ページ: `numbers/` 配下（基本は 1 数字 = 1 ファイル）
 - 一部の規格・コード情報は Wikidata（CC0）から自動取得して補強します
+- Wikipedia（日本語）の冒頭（概要）を短く要約して補強します（長文転載はしません）
 
 ## 方針（公開に耐えるための注意）
 
@@ -30,6 +31,13 @@ Wikidata 連携の制御（任意）:
 ```powershell
 "D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe" tools/generate_numbers.py --no-wikidata
 "D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe" tools/generate_numbers.py --refresh-wikidata
+```
+
+Wikipedia（日本語）連携の制御（任意）:
+
+```powershell
+"D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe" tools/generate_numbers.py --no-wikipedia
+"D:/VisualStudio Code Userfile/ChearSheet-of_Numbers/.venv/Scripts/python.exe" tools/generate_numbers.py --refresh-wikipedia
 ```
 
 ## 参考リンク

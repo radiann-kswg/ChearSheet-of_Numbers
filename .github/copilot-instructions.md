@@ -79,6 +79,16 @@
   - `--no-wikidata`: Wikidata 連携を無効化
   - `--refresh-wikidata`: キャッシュを更新
 
+### Wikipedia（日本語）連携（概要の自動取得）
+
+- `tools/generate_numbers.py` は MediaWiki API を使い、各数字ページの Wikipedia（日本語）冒頭（概要）を取得して、`Wikipedia（要点）` の箇条書きを補強します。
+  - 目的: テンプレート文のままになっているページを減らしつつ、長文転載を避ける
+  - 方針: **短い要約＋参照リンク**を基本とし、引用は冒頭1文など最小限に留める
+- キャッシュ: `tools/_cache/`（通常はGit管理しない）
+- オプション:
+  - `--no-wikipedia`: Wikipedia（日本語）連携を無効化
+  - `--refresh-wikipedia`: キャッシュを更新
+
 ### 追加・更新時の最低限手順
 
 - 生成コマンド（PowerShell 例）:
