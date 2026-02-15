@@ -101,6 +101,13 @@ def _split_math_prefix(text: str) -> tuple[str, str] | None:
 def _to_katex_math(expr: str) -> str:
     s = expr
 
+    # Defensive normalization:
+    # Some pipelines/tools may double-escape backslashes, resulting in strings like
+    # "\\times" in the final Markdown. For KaTeX macros, a single backslash is enough.
+    # We only collapse when the backslashes are immediately followed by a macro name
+    # (alphabetic), so we don't touch LaTeX line breaks ("\\\\") if they ever appear.
+    s = re.sub(r"\\{2,}(?=[A-Za-z])", r"\\", s)
+
     # Normalize characters.
     s = s.replace("×", r"\times")
     s = s.replace("÷", r"\div")
