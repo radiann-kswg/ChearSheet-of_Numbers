@@ -798,7 +798,8 @@ def render_number_page(
 
     flag_text = " / ".join(flags) if flags else "（特記事項なし）"
 
-    reps_lines = "\n".join([f"- **{k}**: `{v}`" for k, v in info.representations.items()])
+    reps_lines = "\n".join(
+        [f"- **{k}**: `{v}`" for k, v in info.representations.items()])
 
     factorization_katex = _to_katex_math(info.factorization)
     math_lines: list[str] = [
@@ -860,27 +861,33 @@ def render_number_page(
         facts = extract_wikipedia_facts(intro_extract)
         prime_index = facts.get("prime_index")
         if info.is_prime and isinstance(prime_index, int):
-            wikipedia_points.append(f"- {prime_index}番目の素数として説明される（Wikipedia参照）")
+            wikipedia_points.append(
+                f"- {prime_index}番目の素数として説明される（Wikipedia参照）")
 
         fib_index = facts.get("fibonacci_index")
         if info.is_fibonacci and isinstance(fib_index, int):
-            wikipedia_points.append(f"- {fib_index}番目のフィボナッチ数として説明される（Wikipedia参照）")
+            wikipedia_points.append(
+                f"- {fib_index}番目のフィボナッチ数として説明される（Wikipedia参照）")
 
         tri_index = facts.get("triangular_index")
         if info.is_triangular and isinstance(tri_index, int):
-            wikipedia_points.append(f"- {tri_index}番目の三角数として説明される（Wikipedia参照）")
+            wikipedia_points.append(
+                f"- {tri_index}番目の三角数として説明される（Wikipedia参照）")
 
         perfect_index = facts.get("perfect_index")
         if info.abundance == "完全数" and isinstance(perfect_index, int):
-            wikipedia_points.append(f"- {perfect_index}番目の完全数として説明される（Wikipedia参照）")
+            wikipedia_points.append(
+                f"- {perfect_index}番目の完全数として説明される（Wikipedia参照）")
 
         terms = facts.get("terms")
         if isinstance(terms, list):
             skip_terms: set[str] = set()
-            skip_terms.update(["素数", "合成数", "平方数", "立方数", "三角数", "フィボナッチ数", "メルセンヌ数"])
+            skip_terms.update(["素数", "合成数", "平方数", "立方数",
+                              "三角数", "フィボナッチ数", "メルセンヌ数"])
             if info.abundance:
                 skip_terms.add(info.abundance)
-            shown_terms = [t for t in terms if isinstance(t, str) and t not in skip_terms][:5]
+            shown_terms = [t for t in terms if isinstance(
+                t, str) and t not in skip_terms][:5]
             for t in shown_terms:
                 wikipedia_points.append(f"- {t}（Wikipedia参照）")
 
@@ -894,7 +901,8 @@ def render_number_page(
                     continue
                 excerpt = s.strip()
                 excerpt = re.sub(r"^\(\s*\)\s*", "", excerpt)
-                excerpt = re.sub(r"^[（(]\s*[0-9一二三四五六七八九十]*\s*[)）]\s*", "", excerpt)
+                excerpt = re.sub(
+                    r"^[（(]\s*[0-9一二三四五六七八九十]*\s*[)）]\s*", "", excerpt)
                 omitted = False
                 if len(excerpt) > 140:
                     excerpt = excerpt[:140].rstrip() + "…"
@@ -918,10 +926,6 @@ def render_number_page(
                     )
 
     other_points: list[str] = []
-    if info.atomic_element is not None:
-        other_points.append(
-            f"- 原子番号 {n} の元素: {info.atomic_element}（Wikipedia『その他』参照）"
-        )
 
     other_pairs = _merge_current_legacy(
         (wikipedia_other_items or {}).get(n),
@@ -933,7 +937,13 @@ def render_number_page(
                 continue
             excerpt = s.strip()
             excerpt = re.sub(r"^\(\s*\)\s*", "", excerpt)
-            excerpt = re.sub(r"^[（(]\s*[0-9一二三四五六七八九十]*\s*[)）]\s*", "", excerpt)
+            excerpt = re.sub(
+                r"^[（(]\s*[0-9一二三四五六七八九十]*\s*[)）]\s*", "", excerpt)
+
+            # Avoid duplication with the dedicated Science section.
+            if info.atomic_element is not None and "原子番号" in excerpt:
+                continue
+
             omitted = False
             if len(excerpt) > 160:
                 excerpt = excerpt[:160].rstrip() + "…"
@@ -1110,7 +1120,8 @@ def render_index() -> str:
         "0〜999 の数字について、数学的な性質（素因数分解・約数・表記など）と、科学/文化に関する一次情報（主に Wikipedia）への導線をまとめたチートシート集です。\n"
     )
     lines.append("- 本文は `numbers/` 配下（基本は 1 数字 = 1 ファイル）")
-    lines.append("- 命名: `numbers/<hundreds>xx/<3桁>.md`（例: `numbers/0xx/031.md`）\n")
+    lines.append(
+        "- 命名: `numbers/<hundreds>xx/<3桁>.md`（例: `numbers/0xx/031.md`）\n")
 
     lines.append("## 運用ヒント\n")
     lines.append("- まず `0xx/1xx/...` の範囲から探す")
@@ -1167,9 +1178,9 @@ def render_readme() -> str:
             "python tools/generate_numbers.py",
             "```",
             "",
-            "- VS Code を使う場合は、`Terminal: Run Task` から生成タスクを実行できます（`python` が PATH で解決できる前提）。",
-            "- `python` が見つからない場合: Python 3 をインストールして PATH に追加（Windows なら `py -3` の利用も可）。",
-            "- venv を使う場合（任意）: `python -m venv .venv`",
+            "- VS Code を使う場合は、`Terminal: Run Task` から生成タスクを実行できます（Python 拡張が選択中のインタープリタを使用）。",
+            "- macOS/Linux で venv（任意）: `python3 -m venv .venv` → `.venv/bin/python tools/generate_numbers.py`",
+            "- Windows で venv（任意）: `py -3 -m venv .venv` → `.venv\\Scripts\\python tools\\generate_numbers.py`",
             "",
             "### 相対リンク（リポジトリ内）",
             "",
@@ -1221,11 +1232,14 @@ def render_readme() -> str:
 
 def write_file(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8", newline="\n")
+    # Python 3.9's Path.write_text() does not support newline=.
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(content)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate number cheat sheets (0..999).")
+    parser = argparse.ArgumentParser(
+        description="Generate number cheat sheets (0..999).")
     parser.add_argument(
         "--offline",
         action="store_true",
@@ -1279,9 +1293,11 @@ def main() -> None:
             cache_path = ROOT / "tools" / "_cache" / "wikidata_enrichment_v1.json"
             if args.offline:
                 if cache_path.exists():
-                    wikidata = load_or_build_enrichment(cache_path=cache_path, refresh=False)
+                    wikidata = load_or_build_enrichment(
+                        cache_path=cache_path, refresh=False)
             else:
-                wikidata = load_or_build_enrichment(cache_path=cache_path, refresh=args.refresh_wikidata)
+                wikidata = load_or_build_enrichment(
+                    cache_path=cache_path, refresh=args.refresh_wikidata)
         except Exception as e:  # noqa: BLE001
             print(f"[warn] Wikidata enrichment skipped: {e}")
 
@@ -1305,13 +1321,14 @@ def main() -> None:
     if args.wikipedia_sections:
         try:
             cache_path = ROOT / "tools" / "_cache" / "wikipedia_ja_properties_v1.json"
-            numbers = only_numbers if only_numbers is not None else list(range(1000))
+            numbers = only_numbers if only_numbers is not None else list(
+                range(1000))
             wikipedia_properties, wikipedia_properties_legacy = (
                 load_or_build_wikipedia_property_sentence_sets_for_numbers(
-                cache_path=cache_path,
-                refresh=args.refresh_wikipedia_sections,
-                numbers=numbers,
-                offline=args.offline,
+                    cache_path=cache_path,
+                    refresh=args.refresh_wikipedia_sections,
+                    numbers=numbers,
+                    offline=args.offline,
                 )
             )
         except Exception as e:  # noqa: BLE001
@@ -1319,13 +1336,14 @@ def main() -> None:
 
         try:
             cache_path = ROOT / "tools" / "_cache" / "wikipedia_ja_others_v1.json"
-            numbers = only_numbers if only_numbers is not None else list(range(1000))
+            numbers = only_numbers if only_numbers is not None else list(
+                range(1000))
             wikipedia_other_items, wikipedia_other_items_legacy = (
                 load_or_build_wikipedia_other_item_sets_for_numbers(
-                cache_path=cache_path,
-                refresh=args.refresh_wikipedia_sections,
-                numbers=numbers,
-                offline=args.offline,
+                    cache_path=cache_path,
+                    refresh=args.refresh_wikipedia_sections,
+                    numbers=numbers,
+                    offline=args.offline,
                 )
             )
         except Exception as e:  # noqa: BLE001
@@ -1337,7 +1355,8 @@ def main() -> None:
         (NUMBERS_DIR / f"{h}xx").mkdir(parents=True, exist_ok=True)
 
     # Generate pages
-    numbers_to_generate = only_numbers if only_numbers is not None else list(range(1000))
+    numbers_to_generate = only_numbers if only_numbers is not None else list(
+        range(1000))
     for n in numbers_to_generate:
         info = build_info(n)
         write_file(

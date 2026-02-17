@@ -29,9 +29,9 @@
 python tools/generate_numbers.py
 ```
 
-- VS Code を使う場合は、`Terminal: Run Task` から生成タスクを実行できます（`python` が PATH で解決できる前提）。
-- `python` が見つからない場合: Python 3 をインストールして PATH に追加（Windows なら `py -3` の利用も可）。
-- venv を使う場合（任意）: `python -m venv .venv`
+- VS Code を使う場合は、`Terminal: Run Task` から生成タスクを実行できます（Python 拡張が選択中のインタープリタを使用）。
+- macOS/Linux で venv（任意）: `python3 -m venv .venv` → `.venv/bin/python tools/generate_numbers.py`
+- Windows で venv（任意）: `py -3 -m venv .venv` → `.venv\Scripts\python tools\generate_numbers.py`
 
 ### 相対リンク（リポジトリ内）
 

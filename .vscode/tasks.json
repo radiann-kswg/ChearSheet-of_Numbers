@@ -1,39 +1,34 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "Generate numbers (wikipedia sections)",
-			"type": "shell",
-			"command": "python",
-			"args": [
-				"tools/generate_numbers.py",
-				"--wikipedia-sections"
-			],
-			"isBackground": false,
-			"problemMatcher": []
-		},
-		{
-			"label": "Generate sample (wikipedia sections)",
-			"type": "shell",
-			"command": "python",
-			"args": [
-				"tools/generate_numbers.py",
-				"--wikipedia-sections",
-				"--only",
-				"22,31,57,444"
-			],
-			"isBackground": false,
-			"problemMatcher": []
-		},
-		{
-			"label": "Check internal links",
-			"type": "shell",
-			"command": "python",
-			"args": [
-				"tools/check_internal_links.py"
-			],
-			"isBackground": false,
-			"problemMatcher": []
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Generate numbers (wikipedia sections)",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": ["tools/generate_numbers.py", "--wikipedia-sections"],
+      "isBackground": false,
+      "problemMatcher": []
+    },
+    {
+      "label": "Generate sample (wikipedia sections)",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "tools/generate_numbers.py",
+        "--wikipedia-sections",
+        "--only",
+        "22,31,57,444"
+      ],
+      "isBackground": false,
+      "problemMatcher": []
+    },
+    {
+      "label": "Check internal links",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": ["tools/check_internal_links.py"],
+      "isBackground": false,
+      "problemMatcher": []
+    }
+  ]
 }

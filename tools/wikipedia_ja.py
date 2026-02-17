@@ -15,6 +15,105 @@ from pathlib import Path
 WIKIPEDIA_JA_API_ENDPOINT = "https://ja.wikipedia.org/w/api.php"
 
 
+_RE_GENERIC_NUMBER_DEFINITION_SENTENCE = re.compile(
+    r"は\s*[、,]?\s*自然数(?:\s*[、,]?\s*(?:または|また)\s*整数において|\s*[、,]?\s*また\s*整数において|\s*[、,]?\s*または\s*整数において|\s*である)"
+)
+_RE_GENERIC_NEXT_PREV_SENTENCE = re.compile(r"\d+\s*の次\s*で\s*\d+\s*の前")
+_RE_GENERIC_POPE = re.compile(r"第\s*\d+\s*代\s*ローマ教皇")
+_RE_GENERIC_QURAN_SURA = re.compile(
+    r"(?:クルアーン|コーラン).{0,40}スーラ|スーラ.{0,40}(?:クルアーン|コーラン)")
+
+
+def _is_generic_low_demand_topic(text: str, *, kind: str) -> bool:
+    """Return True for excerpts that are broadly repeated / low-value across many numbers.
+
+    Policy:
+    - Exclude from importance threshold selection (but allow explicit pins).
+    - Keep this conservative; add patterns only when they're clearly generic.
+    """
+
+    s = _clean_text(text)
+    if not s:
+        return True
+
+    # Generic numeric definition (common to almost every number article).
+    if _RE_GENERIC_NUMBER_DEFINITION_SENTENCE.search(s) or _RE_GENERIC_NEXT_PREV_SENTENCE.search(s):
+        return True
+
+    if kind == "other":
+        # Highly repeated across many numbers in Wikipedia's "その他".
+        if _RE_GENERIC_POPE.search(s):
+            return True
+        if _RE_GENERIC_QURAN_SURA.search(s):
+            return True
+
+    return False
+
+
+_KANJI_DIGITS: dict[int, str] = {
+    0: "零",
+    1: "一",
+    2: "二",
+    3: "三",
+    4: "四",
+    5: "五",
+    6: "六",
+    7: "七",
+    8: "八",
+    9: "九",
+}
+
+
+def _to_kanji_upto_999(n: int) -> str:
+    if not (0 <= n <= 999):
+        raise ValueError("Supported range is 0..999")
+    if n == 0:
+        return _KANJI_DIGITS[0]
+
+    h = n // 100
+    t = (n // 10) % 10
+    u = n % 10
+
+    parts: list[str] = []
+    if h:
+        parts.append(("百" if h == 1 else _KANJI_DIGITS[h] + "百"))
+    if t:
+        parts.append(("十" if t == 1 else _KANJI_DIGITS[t] + "十"))
+    if u:
+        parts.append(_KANJI_DIGITS[u])
+    return "".join(parts)
+
+
+def _number_relevance_tokens(n: int) -> set[str]:
+    # Tokens to ensure the excerpt is about the target number.
+    # We intentionally keep this conservative to avoid pulling in unrelated fragments.
+    tokens: set[str] = {str(n), f"{n:03d}", _to_kanji_upto_999(
+        n), f"第{n}", f"第{_to_kanji_upto_999(n)}"}
+    if n < 100:
+        tokens.add(f"{n:02d}")
+    return {t for t in tokens if isinstance(t, str) and t}
+
+
+def _filter_candidates_relevant_to_number(candidates: list[str], n: int, *, kind: str) -> list[str]:
+    tokens = _number_relevance_tokens(n)
+    out: list[str] = []
+    for s in candidates:
+        s2 = _clean_text(s)
+        if not s2:
+            continue
+        if any(tok in s2 for tok in tokens):
+            out.append(s2)
+            continue
+        # Fallback phrases that still clearly refer to the number within the article context.
+        if "この数" in s2 or "この数字" in s2:
+            out.append(s2)
+            continue
+        if kind == "property" and ("その数" in s2 or "当該" in s2):
+            out.append(s2)
+            continue
+    return out
+
+
 @dataclass(frozen=True)
 class WikipediaSection:
     index: str
@@ -55,7 +154,8 @@ def _http_get_json(
             req = urllib.request.Request(full_url, headers=req_headers)
             with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
                 raw = resp.read()
-                content_encoding = (resp.headers.get("Content-Encoding") or "").lower()
+                content_encoding = (resp.headers.get(
+                    "Content-Encoding") or "").lower()
 
             if content_encoding == "gzip":
                 raw = gzip.decompress(raw)
@@ -76,7 +176,8 @@ def _http_get_json(
                         retry_after = None
 
                     if retry_after and str(retry_after).strip().isdigit():
-                        sleep_sec = max(sleep_sec, float(str(retry_after).strip()))
+                        sleep_sec = max(sleep_sec, float(
+                            str(retry_after).strip()))
                     else:
                         sleep_sec = max(sleep_sec, 30.0)
                 elif e.code in (502, 503, 504):
@@ -84,7 +185,8 @@ def _http_get_json(
 
             time.sleep(sleep_sec)
 
-    raise RuntimeError(f"HTTP GET failed: {full_url} ({last_err})") from last_err
+    raise RuntimeError(
+        f"HTTP GET failed: {full_url} ({last_err})") from last_err
 
 
 def _clean_text(text: str) -> str:
@@ -125,7 +227,7 @@ def fetch_intros_by_titles(titles: list[str]) -> dict[str, WikipediaIntro]:
     chunk_size = 50
 
     for i in range(0, len(titles), chunk_size):
-        chunk = titles[i : i + chunk_size]
+        chunk = titles[i: i + chunk_size]
         titles_param = "|".join(chunk)
 
         data = _http_get_json(
@@ -230,9 +332,12 @@ def _strip_templates(text: str, max_passes: int = 10) -> str:
 
 def _replace_common_templates(text: str) -> str:
     # Preserve a few common math-related templates before stripping the rest.
-    text = re.sub(r"\{\{\s*sup\s*\|\s*([^{}|]+?)\s*\}\}", r"^\1", text, flags=re.IGNORECASE)
-    text = re.sub(r"\{\{\s*sub\s*\|\s*([^{}|]+?)\s*\}\}", r"_\1", text, flags=re.IGNORECASE)
-    text = re.sub(r"\{\{\s*overline\s*\|\s*([^{}|]+?)\s*\}\}", r"\1", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"\{\{\s*sup\s*\|\s*([^{}|]+?)\s*\}\}", r"^\1", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"\{\{\s*sub\s*\|\s*([^{}|]+?)\s*\}\}", r"_\1", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"\{\{\s*overline\s*\|\s*([^{}|]+?)\s*\}\}", r"\1", text, flags=re.IGNORECASE)
     # Symbol templates
     text = re.sub(r"\{\{\s*π\s*\}\}", "π", text)
     text = re.sub(r"\{\{\s*pi\s*\}\}", "π", text, flags=re.IGNORECASE)
@@ -578,20 +683,61 @@ def _build_term_frequency_from_items(items: dict[int, list[str]]) -> dict[str, i
     return freq
 
 
+def _char_bigrams(s: str) -> set[str]:
+    # Japanese texts have no spaces; use character bigrams for a simple similarity proxy.
+    s2 = _clean_text(s)
+    s2 = re.sub(r"\s+", "", s2)
+    if len(s2) < 2:
+        return set()
+    return {s2[i: i + 2] for i in range(len(s2) - 1)}
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    if inter == 0:
+        return 0.0
+    uni = len(a | b)
+    return inter / uni if uni else 0.0
+
+
+def _prune_near_duplicates(items: list[str], *, similarity_threshold: float = 0.88) -> list[str]:
+    out: list[str] = []
+    grams_cache: list[set[str]] = []
+    for s in items:
+        s2 = _clean_text(s)
+        if not s2:
+            continue
+        g = _char_bigrams(s2)
+        redundant = False
+        for og in grams_cache:
+            if _jaccard(g, og) >= similarity_threshold:
+                redundant = True
+                break
+        if redundant:
+            continue
+        out.append(s2)
+        grams_cache.append(g)
+    return out
+
+
 def _select_by_importance(
     candidates: list[str],
     *,
     term_freq: dict[str, int],
     searchhits_cache: dict[str, int],
     offline: bool,
-    limit: int,
+    limit: int | None,
     threshold: int,
     kind: str,
     pinned_substrings: list[str] | None = None,
 ) -> list[str]:
     # NOTE:
-    # "limit" is treated as the *minimum* number of items to include.
-    # If there are 4+ items meeting the importance threshold, we include all of them.
+    # Precision-first selection.
+    # - Keep only items meeting `threshold` (plus explicit pins).
+    # - Optionally cap with `limit` when provided; `None` means unlimited.
+    # - Prune near-duplicate sentences to avoid repetition.
     if not candidates:
         return []
 
@@ -611,7 +757,8 @@ def _select_by_importance(
 
     pinned_selected: list[str] = []
     if pinned_substrings:
-        pins = [_clean_text(p) for p in pinned_substrings if isinstance(p, str)]
+        pins = [_clean_text(p)
+                for p in pinned_substrings if isinstance(p, str)]
         pins = [p for p in pins if p]
         if pins:
             used: set[str] = set()
@@ -625,9 +772,18 @@ def _select_by_importance(
                         # 1 pin -> at most 1 selected line
                         break
 
+    if limit is not None and len(pinned_selected) >= limit:
+        return pinned_selected[:limit]
+
     if pinned_selected:
         pinned_set = set(pinned_selected)
         cleaned = [s for s in cleaned if s not in pinned_set]
+
+    # Exclude broadly repeated / low-demand topics from threshold selection.
+    cleaned = [
+        s for s in cleaned if not _is_generic_low_demand_topic(s, kind=kind)]
+    if not cleaned:
+        return pinned_selected[:limit] if limit is not None else pinned_selected
 
     if kind == "property":
         heur = _heuristic_property_score
@@ -635,7 +791,8 @@ def _select_by_importance(
         heur = _heuristic_other_score
 
     # Limit expensive search queries per number.
-    ranked_for_search = sorted(cleaned, key=lambda s: (heur(s), len(s)), reverse=True)
+    ranked_for_search = sorted(
+        cleaned, key=lambda s: (heur(s), len(s)), reverse=True)
     search_terms: set[str] = set()
     for s in ranked_for_search[:_MAX_SEARCH_QUERIES_PER_NUMBER]:
         term = _extract_scoring_term(s)
@@ -649,7 +806,8 @@ def _select_by_importance(
             term,
             offline=offline,
             searchhits_cache=searchhits_cache,
-            allow_fetch=(term is not None and _clean_text(term) in search_terms),
+            allow_fetch=(term is not None and _clean_text(
+                term) in search_terms),
         )
         uniq = _estimate_uniqueness_score(term, term_freq)
         importance = max(1, min(100, fame * uniq))
@@ -657,25 +815,19 @@ def _select_by_importance(
 
     scored.sort(key=lambda x: (x[0], x[1], x[2], x[3]), reverse=True)
 
-    preferred = [s for importance, _, _, _, s in scored if importance >= threshold]
-    # If enough items meet the threshold, include *all* of them.
-    if len(preferred) >= limit:
-        return pinned_selected + preferred
-    # Fill with the next best even if below the threshold.
-    out: list[str] = []
-    used: set[str] = set()
-    for s in preferred:
-        if s not in used:
-            used.add(s)
-            out.append(s)
-    for importance, _, _, _, s in scored:
-        if s in used:
-            continue
-        used.add(s)
-        out.append(s)
-        if len(out) >= limit:
-            break
-    return pinned_selected + out
+    preferred = [s for importance, _, _, _,
+                 s in scored if importance >= threshold]
+
+    # Precision: do NOT fill with below-threshold items.
+    preferred = [s for s in preferred if s not in set(pinned_selected)]
+    preferred = _prune_near_duplicates(preferred)
+
+    selected = pinned_selected + preferred
+    selected = _prune_near_duplicates(selected)
+
+    if limit is None:
+        return selected
+    return selected[:limit]
 
 
 def _select_by_importance_legacy(
@@ -715,7 +867,8 @@ def _select_by_importance_legacy(
 
     pinned_selected: list[str] = []
     if pinned_substrings:
-        pins = [_clean_text(p) for p in pinned_substrings if isinstance(p, str)]
+        pins = [_clean_text(p)
+                for p in pinned_substrings if isinstance(p, str)]
         pins = [p for p in pins if p]
         if pins:
             used: set[str] = set()
@@ -738,12 +891,19 @@ def _select_by_importance_legacy(
         pinned_set = set(pinned_selected)
         cleaned = [s for s in cleaned if s not in pinned_set]
 
+    # Exclude broadly repeated / low-demand topics from threshold selection.
+    cleaned = [
+        s for s in cleaned if not _is_generic_low_demand_topic(s, kind=kind)]
+    if not cleaned:
+        return pinned_selected[:limit]
+
     if kind == "property":
         heur = _heuristic_property_score
     else:
         heur = _heuristic_other_score
 
-    ranked_for_search = sorted(cleaned, key=lambda s: (heur(s), len(s)), reverse=True)
+    ranked_for_search = sorted(
+        cleaned, key=lambda s: (heur(s), len(s)), reverse=True)
     search_terms: set[str] = set()
     for s in ranked_for_search[:_MAX_SEARCH_QUERIES_PER_NUMBER]:
         term = _extract_scoring_term(s)
@@ -757,7 +917,8 @@ def _select_by_importance_legacy(
             term,
             offline=offline,
             searchhits_cache=searchhits_cache,
-            allow_fetch=(term is not None and _clean_text(term) in search_terms),
+            allow_fetch=(term is not None and _clean_text(
+                term) in search_terms),
         )
         uniq = _estimate_uniqueness_score(term, term_freq)
         importance = max(1, min(100, fame * uniq))
@@ -765,7 +926,8 @@ def _select_by_importance_legacy(
 
     scored.sort(key=lambda x: (x[0], x[1], x[2], x[3]), reverse=True)
 
-    preferred = [s for importance, _, _, _, s in scored if importance >= threshold]
+    preferred = [s for importance, _, _, _,
+                 s in scored if importance >= threshold]
     if len(preferred) >= limit:
         return pinned_selected + preferred[: (limit - len(pinned_selected))]
 
@@ -833,7 +995,8 @@ def load_or_build_wikipedia_property_sentence_sets_for_numbers(
     elif refresh:
         to_fetch = list(requested_set)
     else:
-        missing_any = [n for n in requested_set if (n not in cached_all) or (n not in cached_legacy)]
+        missing_any = [n for n in requested_set if (
+            n not in cached_all) or (n not in cached_legacy)]
         to_fetch = missing_any
 
     if to_fetch:
@@ -843,7 +1006,8 @@ def load_or_build_wikipedia_property_sentence_sets_for_numbers(
         pins_path = cache_path.parent.parent / "wikipedia_ja_pins_v1.json"
         pins_config = _load_pins_config(pins_path)
 
-        overrides_path = cache_path.parent.parent / "wikipedia_ja_importance_overrides_v1.json"
+        overrides_path = cache_path.parent.parent / \
+            "wikipedia_ja_importance_overrides_v1.json"
         threshold_overrides = _load_threshold_overrides_config(overrides_path)
 
         term_freq = _build_term_frequency_from_items(cached_all)
@@ -852,9 +1016,13 @@ def load_or_build_wikipedia_property_sentence_sets_for_numbers(
         for n in sorted(to_fetch):
             title = str(n)
             try:
-                candidates = extract_property_candidate_sentences_from_title(title)
+                candidates = extract_property_candidate_sentences_from_title(
+                    title)
             except Exception:
                 candidates = []
+            if candidates:
+                candidates = _filter_candidates_relevant_to_number(
+                    candidates, n, kind="property")
             if candidates:
                 fetched_candidates[n] = candidates
                 for s in candidates:
@@ -867,14 +1035,15 @@ def load_or_build_wikipedia_property_sentence_sets_for_numbers(
 
         for n, candidates in fetched_candidates.items():
             pinned = pins_config.get(n, {}).get("property")
-            threshold = threshold_overrides.get(n, {}).get("property", _IMPORTANCE_THRESHOLD)
+            threshold = threshold_overrides.get(n, {}).get(
+                "property", _IMPORTANCE_THRESHOLD)
 
             selected_current = _select_by_importance(
                 candidates,
                 term_freq=term_freq,
                 searchhits_cache=searchhits_cache,
                 offline=offline,
-                limit=3,
+                limit=None,
                 threshold=threshold,
                 kind="property",
                 pinned_substrings=pinned,
@@ -964,7 +1133,8 @@ def load_or_build_wikipedia_other_item_sets_for_numbers(
     elif refresh:
         to_fetch = list(requested_set)
     else:
-        missing_any = [n for n in requested_set if (n not in cached_all) or (n not in cached_legacy)]
+        missing_any = [n for n in requested_set if (
+            n not in cached_all) or (n not in cached_legacy)]
         to_fetch = missing_any
 
     if to_fetch:
@@ -974,7 +1144,8 @@ def load_or_build_wikipedia_other_item_sets_for_numbers(
         pins_path = cache_path.parent.parent / "wikipedia_ja_pins_v1.json"
         pins_config = _load_pins_config(pins_path)
 
-        overrides_path = cache_path.parent.parent / "wikipedia_ja_importance_overrides_v1.json"
+        overrides_path = cache_path.parent.parent / \
+            "wikipedia_ja_importance_overrides_v1.json"
         threshold_overrides = _load_threshold_overrides_config(overrides_path)
 
         term_freq = _build_term_frequency_from_items(cached_all)
@@ -987,6 +1158,9 @@ def load_or_build_wikipedia_other_item_sets_for_numbers(
             except Exception:
                 candidates = []
             if candidates:
+                candidates = _filter_candidates_relevant_to_number(
+                    candidates, n, kind="other")
+            if candidates:
                 fetched_candidates[n] = candidates
                 for s in candidates:
                     term = _extract_scoring_term(s)
@@ -998,14 +1172,15 @@ def load_or_build_wikipedia_other_item_sets_for_numbers(
 
         for n, candidates in fetched_candidates.items():
             pinned = pins_config.get(n, {}).get("other")
-            threshold = threshold_overrides.get(n, {}).get("other", _IMPORTANCE_THRESHOLD)
+            threshold = threshold_overrides.get(
+                n, {}).get("other", _IMPORTANCE_THRESHOLD)
 
             selected_current = _select_by_importance(
                 candidates,
                 term_freq=term_freq,
                 searchhits_cache=searchhits_cache,
                 offline=offline,
-                limit=3,
+                limit=None,
                 threshold=threshold,
                 kind="other",
                 pinned_substrings=pinned,
@@ -1138,7 +1313,8 @@ def extract_property_candidate_sentences_from_plain_text(text: str, max_candidat
             continue
         sentences.append(s)
 
-    ranked = sorted(sentences, key=lambda s: (_heuristic_property_score(s), len(s)), reverse=True)
+    ranked = sorted(sentences, key=lambda s: (
+        _heuristic_property_score(s), len(s)), reverse=True)
     out: list[str] = []
     seen: set[str] = set()
     for s in ranked:
@@ -1309,7 +1485,8 @@ def extract_other_candidate_items_from_plain_text(text: str, max_candidates: int
             continue
         cleaned.append(s)
 
-    ranked = sorted(cleaned, key=lambda s: (_heuristic_other_score(s), -len(s)), reverse=True)
+    ranked = sorted(cleaned, key=lambda s: (
+        _heuristic_other_score(s), -len(s)), reverse=True)
     out: list[str] = []
     seen: set[str] = set()
     for s in ranked:
@@ -1420,9 +1597,18 @@ def extract_wikipedia_facts(intro_extract: str) -> dict[str, object]:
     if found_terms:
         facts["terms"] = found_terms
 
-    sentence = _first_sentence_ja(text)
-    if sentence:
-        facts["first_sentence"] = sentence
+    # Prefer a non-generic sentence for quoting.
+    # Many number pages start with a boilerplate definition.
+    parts = [p.strip() for p in text.split("。") if p.strip()]
+    chosen: str | None = None
+    for p in parts[:3]:
+        s = p + "。"
+        if _is_generic_low_demand_topic(s, kind="other"):
+            continue
+        chosen = s
+        break
+    if chosen:
+        facts["first_sentence"] = chosen
 
     return facts
 
