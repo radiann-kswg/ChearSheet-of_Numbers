@@ -815,15 +815,39 @@ def _select_by_importance(
 
     scored.sort(key=lambda x: (x[0], x[1], x[2], x[3]), reverse=True)
 
-    preferred = [s for importance, _, _, _,
-                 s in scored if importance >= threshold]
+    preferred = [s for importance, _, _, _, s in scored if importance >= threshold]
 
-    # Precision: do NOT fill with below-threshold items.
+    # Keep pins + above-threshold items first.
     preferred = [s for s in preferred if s not in set(pinned_selected)]
     preferred = _prune_near_duplicates(preferred)
 
     selected = pinned_selected + preferred
     selected = _prune_near_duplicates(selected)
+
+    if limit is not None and len(selected) >= limit:
+        return selected[:limit]
+
+    # Fallback:
+    # Some numbers end up with very few above-threshold items, which makes pages feel
+    # unnaturally sparse. To keep the cheat-sheet useful, fill up to a small
+    # minimum count with the next best candidates (even if below threshold).
+    # This keeps "all above-threshold" while improving recall.
+    fallback_min = 0
+    if kind == "other":
+        fallback_min = 10
+    elif kind == "property":
+        fallback_min = 6
+
+    if fallback_min and len(selected) < fallback_min:
+        selected_set = set(selected)
+        # `scored` is already sorted best-first.
+        fallback_candidates = [s for _, _, _, _, s in scored if s not in selected_set]
+        fallback_candidates = _prune_near_duplicates(fallback_candidates)
+        need = fallback_min - len(selected)
+        if limit is not None:
+            need = min(need, max(0, limit - len(selected)))
+        if need > 0:
+            selected.extend(fallback_candidates[:need])
 
     if limit is None:
         return selected
@@ -1609,6 +1633,9 @@ def extract_wikipedia_facts(intro_extract: str) -> dict[str, object]:
         break
     if chosen:
         facts["first_sentence"] = chosen
+    elif parts:
+        # Fallback to the very first sentence to avoid losing the intro excerpt entirely.
+        facts["first_sentence"] = parts[0] + "。"
 
     return facts
 
