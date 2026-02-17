@@ -22,6 +22,9 @@ _RE_GENERIC_NEXT_PREV_SENTENCE = re.compile(r"\d+\s*の次\s*で\s*\d+\s*の前"
 _RE_GENERIC_POPE = re.compile(r"第\s*\d+\s*代\s*ローマ教皇")
 _RE_GENERIC_QURAN_SURA = re.compile(
     r"(?:クルアーン|コーラン).{0,40}スーラ|スーラ.{0,40}(?:クルアーン|コーラン)")
+_RE_GENERIC_OTHER_RELATED_STUB = re.compile(
+    r"^その他\s*(?:\d+|[零〇一二三四五六七八九十百]+)\s*に関連すること。?$"
+)
 
 
 def _is_generic_low_demand_topic(text: str, *, kind: str) -> bool:
@@ -45,6 +48,9 @@ def _is_generic_low_demand_topic(text: str, *, kind: str) -> bool:
         if _RE_GENERIC_POPE.search(s):
             return True
         if _RE_GENERIC_QURAN_SURA.search(s):
+            return True
+        # Content-less stub lines that add no information.
+        if _RE_GENERIC_OTHER_RELATED_STUB.search(s):
             return True
 
     return False
@@ -94,21 +100,43 @@ def _number_relevance_tokens(n: int) -> set[str]:
     return {t for t in tokens if isinstance(t, str) and t}
 
 
-def _filter_candidates_relevant_to_number(candidates: list[str], n: int, *, kind: str) -> list[str]:
+def _filter_candidates_relevant_to_number(
+    candidates: list[str],
+    n: int,
+    *,
+    kind: str,
+    pinned_substrings: list[str] | None = None,
+) -> list[str]:
     tokens = _number_relevance_tokens(n)
+    pins: list[str] = []
+    if pinned_substrings:
+        pins = [_clean_text(p) for p in pinned_substrings if isinstance(p, str)]
+        pins = [p for p in pins if p]
     out: list[str] = []
     for s in candidates:
         s2 = _clean_text(s)
         if not s2:
             continue
-        if any(tok in s2 for tok in tokens):
+        # Always keep pinned candidates, even if they don't contain number tokens.
+        if pins and any(p in s2 for p in pins):
+            out.append(s2)
+            continue
+        # Ignore leading ordinal/parenthetical markers like "(603) ...".
+        # These often appear in list items and are not evidence that the excerpt is about the number.
+        s_match = re.sub(r"^\(\s*\)\s*", "", s2)
+        s_match = re.sub(r"^[（(]\s*[0-9一二三四五六七八九十]*\s*[)）]\s*", "", s_match)
+
+        if any(tok in s_match for tok in tokens):
             out.append(s2)
             continue
         # Fallback phrases that still clearly refer to the number within the article context.
-        if "この数" in s2 or "この数字" in s2:
+        # Guardrail: don't accept fallback lines that contain other multi-digit numbers
+        # (e.g., 603-page excerpt that only talks about 600) unless the target token matches.
+        has_other_large_number = bool(re.search(r"\d{3,}", s_match)) or bool(re.search(r"[一二三四五六七八九]百", s_match))
+        if ("この数" in s_match or "この数字" in s_match) and not has_other_large_number:
             out.append(s2)
             continue
-        if kind == "property" and ("その数" in s2 or "当該" in s2):
+        if kind == "property" and ("その数" in s_match or "当該" in s_match) and not has_other_large_number:
             out.append(s2)
             continue
     return out
@@ -779,10 +807,18 @@ def _select_by_importance(
         pinned_set = set(pinned_selected)
         cleaned = [s for s in cleaned if s not in pinned_set]
 
+    # Drop content-less stubs when other options exist.
+    contentless = [s for s in cleaned if _RE_GENERIC_OTHER_RELATED_STUB.search(_clean_text(s))]
+    cleaned = [s for s in cleaned if not _RE_GENERIC_OTHER_RELATED_STUB.search(_clean_text(s))]
+    if not cleaned and contentless:
+        cleaned = contentless
+
     # Exclude broadly repeated / low-demand topics from threshold selection.
-    cleaned = [
-        s for s in cleaned if not _is_generic_low_demand_topic(s, kind=kind)]
-    if not cleaned:
+    # But keep them as *last-resort* fillers to avoid shrinking page content too much.
+    non_generic = [s for s in cleaned if not _is_generic_low_demand_topic(s, kind=kind)]
+    generic = [s for s in cleaned if _is_generic_low_demand_topic(s, kind=kind)]
+    cleaned_for_scoring = non_generic if non_generic else cleaned
+    if not cleaned_for_scoring:
         return pinned_selected[:limit] if limit is not None else pinned_selected
 
     if kind == "property":
@@ -792,7 +828,7 @@ def _select_by_importance(
 
     # Limit expensive search queries per number.
     ranked_for_search = sorted(
-        cleaned, key=lambda s: (heur(s), len(s)), reverse=True)
+        cleaned_for_scoring, key=lambda s: (heur(s), len(s)), reverse=True)
     search_terms: set[str] = set()
     for s in ranked_for_search[:_MAX_SEARCH_QUERIES_PER_NUMBER]:
         term = _extract_scoring_term(s)
@@ -800,7 +836,7 @@ def _select_by_importance(
             search_terms.add(_clean_text(term))
 
     scored: list[tuple[int, int, int, int, str]] = []
-    for s in cleaned:
+    for s in cleaned_for_scoring:
         term = _extract_scoring_term(s)
         fame = _estimate_fame_score(
             term,
@@ -848,6 +884,16 @@ def _select_by_importance(
             need = min(need, max(0, limit - len(selected)))
         if need > 0:
             selected.extend(fallback_candidates[:need])
+
+    # Last resort: if we still have too few, allow generic fillers.
+    if fallback_min and len(selected) < fallback_min and generic:
+        selected_set = set(selected)
+        generic_fill = [s for s in _prune_near_duplicates(generic) if s not in selected_set]
+        need = fallback_min - len(selected)
+        if limit is not None:
+            need = min(need, max(0, limit - len(selected)))
+        if need > 0:
+            selected.extend(generic_fill[:need])
 
     if limit is None:
         return selected
@@ -915,10 +961,18 @@ def _select_by_importance_legacy(
         pinned_set = set(pinned_selected)
         cleaned = [s for s in cleaned if s not in pinned_set]
 
+    # Drop content-less stubs when other options exist.
+    contentless = [s for s in cleaned if _RE_GENERIC_OTHER_RELATED_STUB.search(_clean_text(s))]
+    cleaned = [s for s in cleaned if not _RE_GENERIC_OTHER_RELATED_STUB.search(_clean_text(s))]
+    if not cleaned and contentless:
+        cleaned = contentless
+
     # Exclude broadly repeated / low-demand topics from threshold selection.
-    cleaned = [
-        s for s in cleaned if not _is_generic_low_demand_topic(s, kind=kind)]
-    if not cleaned:
+    # But keep them as *last-resort* fillers so merged output doesn't shrink.
+    non_generic = [s for s in cleaned if not _is_generic_low_demand_topic(s, kind=kind)]
+    generic = [s for s in cleaned if _is_generic_low_demand_topic(s, kind=kind)]
+    cleaned_for_scoring = non_generic if non_generic else cleaned
+    if not cleaned_for_scoring:
         return pinned_selected[:limit]
 
     if kind == "property":
@@ -927,7 +981,7 @@ def _select_by_importance_legacy(
         heur = _heuristic_other_score
 
     ranked_for_search = sorted(
-        cleaned, key=lambda s: (heur(s), len(s)), reverse=True)
+        cleaned_for_scoring, key=lambda s: (heur(s), len(s)), reverse=True)
     search_terms: set[str] = set()
     for s in ranked_for_search[:_MAX_SEARCH_QUERIES_PER_NUMBER]:
         term = _extract_scoring_term(s)
@@ -935,7 +989,7 @@ def _select_by_importance_legacy(
             search_terms.add(_clean_text(term))
 
     scored: list[tuple[int, int, int, int, str]] = []
-    for s in cleaned:
+    for s in cleaned_for_scoring:
         term = _extract_scoring_term(s)
         fame = _estimate_fame_score(
             term,
@@ -996,8 +1050,7 @@ def load_or_build_wikipedia_property_sentence_sets_for_numbers(
                 if not isinstance(v, list):
                     continue
                 lines = [s for s in v if isinstance(s, str) and s.strip()]
-                if lines:
-                    cached_all[n] = lines
+                cached_all[n] = lines
 
         legacy_items = raw.get("properties_legacy", {})
         if isinstance(legacy_items, dict):
@@ -1009,8 +1062,7 @@ def load_or_build_wikipedia_property_sentence_sets_for_numbers(
                 if not isinstance(v, list):
                     continue
                 lines = [s for s in v if isinstance(s, str) and s.strip()]
-                if lines:
-                    cached_legacy[n] = lines
+                cached_legacy[n] = lines
 
     requested_set = set(numbers)
     to_fetch: list[int]
@@ -1047,14 +1099,13 @@ def load_or_build_wikipedia_property_sentence_sets_for_numbers(
             if candidates:
                 candidates = _filter_candidates_relevant_to_number(
                     candidates, n, kind="property")
-            if candidates:
-                fetched_candidates[n] = candidates
-                for s in candidates:
-                    term = _extract_scoring_term(s)
-                    if term:
-                        t = _clean_text(term)
-                        if t:
-                            term_freq[t] = term_freq.get(t, 0) + 1
+            fetched_candidates[n] = candidates
+            for s in candidates:
+                term = _extract_scoring_term(s)
+                if term:
+                    t = _clean_text(term)
+                    if t:
+                        term_freq[t] = term_freq.get(t, 0) + 1
             time.sleep(0.2)
 
         for n, candidates in fetched_candidates.items():
@@ -1072,8 +1123,7 @@ def load_or_build_wikipedia_property_sentence_sets_for_numbers(
                 kind="property",
                 pinned_substrings=pinned,
             )
-            if selected_current:
-                cached_all[n] = selected_current
+            cached_all[n] = selected_current
 
             selected_legacy = _select_by_importance_legacy(
                 candidates,
@@ -1085,8 +1135,7 @@ def load_or_build_wikipedia_property_sentence_sets_for_numbers(
                 kind="property",
                 pinned_substrings=pinned,
             )
-            if selected_legacy:
-                cached_legacy[n] = selected_legacy
+            cached_legacy[n] = selected_legacy
 
         if not offline:
             _save_searchhits_cache(searchhits_cache_path, searchhits_cache)
@@ -1119,11 +1168,13 @@ def load_or_build_wikipedia_other_item_sets_for_numbers(
     """Return (current, legacy) selections for Wikipedia 'その他' essences."""
     cached_all: dict[int, list[str]] = {}
     cached_legacy: dict[int, list[str]] = {}
+
     if cache_path.exists():
         try:
             raw = json.loads(cache_path.read_text(encoding="utf-8"))
         except Exception:
             raw = {}
+
         items = raw.get("others", {})
         if isinstance(items, dict):
             for k, v in items.items():
@@ -1134,8 +1185,7 @@ def load_or_build_wikipedia_other_item_sets_for_numbers(
                 if not isinstance(v, list):
                     continue
                 lines = [s for s in v if isinstance(s, str) and s.strip()]
-                if lines:
-                    cached_all[n] = lines
+                cached_all[n] = lines
 
         legacy_items = raw.get("others_legacy", {})
         if isinstance(legacy_items, dict):
@@ -1147,8 +1197,7 @@ def load_or_build_wikipedia_other_item_sets_for_numbers(
                 if not isinstance(v, list):
                     continue
                 lines = [s for s in v if isinstance(s, str) and s.strip()]
-                if lines:
-                    cached_legacy[n] = lines
+                cached_legacy[n] = lines
 
     requested_set = set(numbers)
     to_fetch: list[int]
@@ -1157,9 +1206,7 @@ def load_or_build_wikipedia_other_item_sets_for_numbers(
     elif refresh:
         to_fetch = list(requested_set)
     else:
-        missing_any = [n for n in requested_set if (
-            n not in cached_all) or (n not in cached_legacy)]
-        to_fetch = missing_any
+        to_fetch = [n for n in requested_set if (n not in cached_all) or (n not in cached_legacy)]
 
     if to_fetch:
         searchhits_cache_path = cache_path.parent / "wikipedia_ja_searchhits_v1.json"
@@ -1168,8 +1215,7 @@ def load_or_build_wikipedia_other_item_sets_for_numbers(
         pins_path = cache_path.parent.parent / "wikipedia_ja_pins_v1.json"
         pins_config = _load_pins_config(pins_path)
 
-        overrides_path = cache_path.parent.parent / \
-            "wikipedia_ja_importance_overrides_v1.json"
+        overrides_path = cache_path.parent.parent / "wikipedia_ja_importance_overrides_v1.json"
         threshold_overrides = _load_threshold_overrides_config(overrides_path)
 
         term_freq = _build_term_frequency_from_items(cached_all)
@@ -1182,22 +1228,23 @@ def load_or_build_wikipedia_other_item_sets_for_numbers(
             except Exception:
                 candidates = []
             if candidates:
+                pinned_for_n = pins_config.get(n, {}).get("other")
                 candidates = _filter_candidates_relevant_to_number(
-                    candidates, n, kind="other")
-            if candidates:
-                fetched_candidates[n] = candidates
-                for s in candidates:
-                    term = _extract_scoring_term(s)
-                    if term:
-                        t = _clean_text(term)
-                        if t:
-                            term_freq[t] = term_freq.get(t, 0) + 1
+                    candidates, n, kind="other", pinned_substrings=pinned_for_n)
+
+            fetched_candidates[n] = candidates
+            for s in candidates:
+                term = _extract_scoring_term(s)
+                if term:
+                    t = _clean_text(term)
+                    if t:
+                        term_freq[t] = term_freq.get(t, 0) + 1
             time.sleep(0.2)
 
         for n, candidates in fetched_candidates.items():
             pinned = pins_config.get(n, {}).get("other")
-            threshold = threshold_overrides.get(
-                n, {}).get("other", _IMPORTANCE_THRESHOLD)
+            threshold = threshold_overrides.get(n, {}).get(
+                "other", _IMPORTANCE_THRESHOLD)
 
             selected_current = _select_by_importance(
                 candidates,
@@ -1209,8 +1256,7 @@ def load_or_build_wikipedia_other_item_sets_for_numbers(
                 kind="other",
                 pinned_substrings=pinned,
             )
-            if selected_current:
-                cached_all[n] = selected_current
+            cached_all[n] = selected_current
 
             selected_legacy = _select_by_importance_legacy(
                 candidates,
@@ -1222,8 +1268,7 @@ def load_or_build_wikipedia_other_item_sets_for_numbers(
                 kind="other",
                 pinned_substrings=pinned,
             )
-            if selected_legacy:
-                cached_legacy[n] = selected_legacy
+            cached_legacy[n] = selected_legacy
 
         if not offline:
             _save_searchhits_cache(searchhits_cache_path, searchhits_cache)

@@ -4,6 +4,7 @@ import argparse
 from collections.abc import Sequence
 import math
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import re
@@ -19,6 +20,146 @@ from wikipedia_ja import (
 
 ROOT = Path(__file__).resolve().parents[1]
 NUMBERS_DIR = ROOT / "numbers"
+
+
+_RE_WIKIPEDIA_OTHER_RELATED_STUB = re.compile(
+    r"^その他\s*(?:\d+|[零〇一二三四五六七八九十百]+)\s*に関連すること。?$"
+)
+
+
+_RE_WIKIPEDIA_OTHER_LOW_VALUE = re.compile(
+    r"(?:JIS\s*X\s*0401|ISO\s*3166-2:JP|都道府県コード|アメリカ合衆国第\s*\d+\s*代大統領)"
+)
+
+
+_KANJI_DIGITS: dict[int, str] = {
+    0: "零",
+    1: "一",
+    2: "二",
+    3: "三",
+    4: "四",
+    5: "五",
+    6: "六",
+    7: "七",
+    8: "八",
+    9: "九",
+}
+
+
+def _to_kanji_upto_999(n: int) -> str:
+    if not (0 <= n <= 999):
+        raise ValueError("Supported range is 0..999")
+    if n == 0:
+        return _KANJI_DIGITS[0]
+
+    h = n // 100
+    t = (n // 10) % 10
+    u = n % 10
+
+    parts: list[str] = []
+    if h:
+        parts.append(("百" if h == 1 else _KANJI_DIGITS[h] + "百"))
+    if t:
+        parts.append(("十" if t == 1 else _KANJI_DIGITS[t] + "十"))
+    if u:
+        parts.append(_KANJI_DIGITS[u])
+    return "".join(parts)
+
+
+def _number_relevance_tokens(n: int) -> set[str]:
+    kanji = _to_kanji_upto_999(n)
+    tokens: set[str] = {str(n), f"{n:03d}", kanji, f"第{n}", f"第{kanji}"}
+    if n < 100:
+        tokens.add(f"{n:02d}")
+    return {t for t in tokens if t}
+
+
+def _strip_leading_ordinal_marker(s: str) -> str:
+    s2 = s.strip()
+    s2 = re.sub(r"^\(\s*\)\s*", "", s2)
+    s2 = re.sub(r"^[（(]\s*[0-9一二三四五六七八九十]*\s*[)）]\s*", "", s2)
+    return s2.strip()
+
+def _load_wikipedia_pins_config(pins_path: Path) -> dict[int, dict[str, list[str]]]:
+    if not pins_path.exists():
+        return {}
+    try:
+        raw = json.loads(pins_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    pins = raw.get("pins", {})
+    if not isinstance(pins, dict):
+        return {}
+
+    out: dict[int, dict[str, list[str]]] = {}
+    for k, v in pins.items():
+        try:
+            n = int(k)
+        except ValueError:
+            continue
+        if not isinstance(v, dict):
+            continue
+        entry: dict[str, list[str]] = {}
+        for kind, arr in v.items():
+            if not isinstance(arr, list):
+                continue
+            entry[str(kind)] = [str(s) for s in arr if isinstance(s, str) and s.strip()]
+        if entry:
+            out[n] = entry
+    return out
+
+
+def _filter_wikipedia_other_excerpts_for_number(
+    excerpts: list[str],
+    n: int,
+    *,
+    pinned_substrings: list[str] | None = None,
+) -> list[str]:
+    if not excerpts:
+        return []
+
+    tokens = _number_relevance_tokens(n)
+    pins = [p.strip() for p in (pinned_substrings or []) if isinstance(p, str) and p.strip()]
+    kept: list[str] = []
+    low_value: list[str] = []
+    stubs: list[str] = []
+
+    for raw in excerpts:
+        if not isinstance(raw, str):
+            continue
+        s = raw.strip()
+        if not s:
+            continue
+
+        if pins and any(p in s for p in pins):
+            kept.append(s)
+            continue
+
+        if _RE_WIKIPEDIA_OTHER_RELATED_STUB.search(s):
+            stubs.append(s)
+            continue
+
+        s_match = _strip_leading_ordinal_marker(s)
+
+        if _RE_WIKIPEDIA_OTHER_LOW_VALUE.search(s_match):
+            low_value.append(s)
+            continue
+
+        if any(tok in s_match for tok in tokens):
+            kept.append(s)
+            continue
+
+        if "この数" in s_match or "この数字" in s_match:
+            has_other_large_number = bool(re.search(r"\d{3,}", s_match)) or bool(re.search(r"[一二三四五六七八九]百", s_match))
+            if not has_other_large_number:
+                kept.append(s)
+            continue
+
+    if kept:
+        return kept
+    if low_value:
+        return low_value
+    return stubs
 
 
 def _dedupe_preserve_order(lines: list[str]) -> list[str]:
@@ -741,6 +882,7 @@ def render_number_page(
     wikipedia_properties_legacy: dict[int, list[str]] | None,
     wikipedia_other_items: dict[int, list[str]] | None,
     wikipedia_other_items_legacy: dict[int, list[str]] | None,
+    wikipedia_pins: dict[int, dict[str, list[str]]] | None = None,
 ) -> str:
     n = info.n
 
@@ -932,6 +1074,10 @@ def render_number_page(
         (wikipedia_other_items_legacy or {}).get(n),
     )
     if other_pairs:
+        pinned_for_n = (wikipedia_pins or {}).get(n, {}).get("other")
+        other_pairs = _filter_wikipedia_other_excerpts_for_number(
+            other_pairs, n, pinned_substrings=pinned_for_n)
+    if other_pairs:
         for s in other_pairs:
             if not isinstance(s, str) or not s.strip():
                 continue
@@ -966,7 +1112,9 @@ def render_number_page(
                     f"- Wikipedia『その他』より（短い引用）: 「{excerpt}」（出典: https://ja.wikipedia.org/wiki/{n}#%E3%81%9D%E3%81%AE%E4%BB%96 / CC BY-SA{(' / ' + note) if note else ''}）"
                 )
 
-    if intro_extract and _looks_like_number_wikipedia_intro(intro_extract):
+    # The intro sentence is a generic definition. Use it only as a last resort
+    # when there are no other "その他" excerpts.
+    if (not other_points) and intro_extract and _looks_like_number_wikipedia_intro(intro_extract):
         facts = extract_wikipedia_facts(intro_extract)
         first_sentence = facts.get("first_sentence")
         if isinstance(first_sentence, str) and first_sentence:
@@ -1318,6 +1466,9 @@ def main() -> None:
     wikipedia_properties_legacy: dict[int, list[str]] | None = None
     wikipedia_other_items: dict[int, list[str]] | None = None
     wikipedia_other_items_legacy: dict[int, list[str]] | None = None
+
+    pins_path = ROOT / "tools" / "wikipedia_ja_pins_v1.json"
+    wikipedia_pins = _load_wikipedia_pins_config(pins_path)
     if args.wikipedia_sections:
         try:
             cache_path = ROOT / "tools" / "_cache" / "wikipedia_ja_properties_v1.json"
@@ -1369,6 +1520,7 @@ def main() -> None:
                 wikipedia_properties_legacy,
                 wikipedia_other_items,
                 wikipedia_other_items_legacy,
+                wikipedia_pins,
             ),
         )
 

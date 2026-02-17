@@ -5,9 +5,17 @@
   },
   "thresholds": {
     "22": { "property": 20 },
+    "25": { "property": 20, "other": 20 },
+    "27": { "other": 20 },
     "31": { "property": 20 },
+    "36": { "property": 20 },
+    "39": { "property": 20 },
     "42": { "other": 20 },
+    "44": { "other": 20 },
+    "48": { "other": 20 },
     "57": { "property": 20, "other": 20 },
+    "74": { "other": 20 },
+    "99": { "other": 20 },
     "444": { "property": 20 }
   }
 }
