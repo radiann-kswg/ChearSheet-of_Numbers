@@ -895,6 +895,13 @@ def _select_by_importance(
         if need > 0:
             selected.extend(generic_fill[:need])
 
+    # Drop content-less stubs when any real content exists.
+    # Keep them only as a last resort when the number has nothing else.
+    if kind == "other" and selected:
+        non_stub = [s for s in selected if not _RE_GENERIC_OTHER_RELATED_STUB.search(_clean_text(s))]
+        if non_stub:
+            selected = non_stub
+
     if limit is None:
         return selected
     return selected[:limit]
