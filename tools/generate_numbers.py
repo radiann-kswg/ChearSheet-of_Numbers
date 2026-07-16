@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
+from datetime import datetime
 import math
 from dataclasses import dataclass
 import html
@@ -1159,6 +1160,58 @@ LORE_CATEGORY_JA = {
 }
 LORE_MAX_PER_CATEGORY = 3
 
+LORE_FILTER_LABELS = {
+    "numerology": "数秘・エンジェル",
+    "gematria": "ゲマトリア",
+    "kikkyo": "吉凶・忌み数",
+    "folklore": "伝承・神話・名数",
+    "meisu": "番号のいわれ",
+    "goro": "語呂合わせ・スラング",
+    "fiction": "創作作品",
+}
+
+LORE_FILTER_ORDER = [
+    "numerology",
+    "gematria",
+    "kikkyo",
+    "folklore",
+    "meisu",
+    "goro",
+    "fiction",
+]
+
+PROPERTY_FILTER_LABELS = {
+    "special": "特殊（0/1）",
+    "prime": "素数",
+    "composite": "合成数",
+    "even": "偶数",
+    "odd": "奇数",
+    "square": "平方数",
+    "cube": "立方数",
+    "triangular": "三角数",
+    "fibonacci": "フィボナッチ数",
+    "mersenne": "メルセンヌ数",
+    "perfect": "完全数",
+    "abundant": "過剰数",
+    "deficient": "不足数",
+}
+
+PROPERTY_FILTER_ORDER = [
+    "special",
+    "prime",
+    "composite",
+    "even",
+    "odd",
+    "square",
+    "cube",
+    "triangular",
+    "fibonacci",
+    "mersenne",
+    "perfect",
+    "abundant",
+    "deficient",
+]
+
 NUMEROLOGY_URL = "https://ja.wikipedia.org/wiki/%E6%95%B0%E7%A7%98%E8%A1%93"
 ANGEL_NUMBER_URL = "https://en.wikipedia.org/wiki/Angel_numbers"
 HEBREW_NUMERALS_URL = "https://en.wikipedia.org/wiki/Hebrew_numerals"
@@ -1325,6 +1378,113 @@ def render_lore_section_lines(n: int) -> list[str]:
         lines.extend(curated_lines)
 
     return lines
+
+
+def _lore_filters_for_number(n: int, lore: dict) -> list[str]:
+    out: list[str] = ["numerology"]
+
+    notable_gematria = lore.get("notable_gematria") or {}
+    if str(n) in notable_gematria:
+        out.append("gematria")
+
+    entries = (lore.get("entries") or {}).get(str(n)) or []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        cat = item.get("cat")
+        if cat in LORE_CATEGORY_ORDER and cat not in out:
+            out.append(cat)
+
+    return [k for k in LORE_FILTER_ORDER if k in out]
+
+
+def _property_filters_for_info(info: NumberInfo) -> list[str]:
+    out: list[str] = []
+
+    if info.n in (0, 1):
+        out.append("special")
+    elif info.is_prime:
+        out.append("prime")
+    else:
+        out.append("composite")
+
+    out.append("even" if info.is_even else "odd")
+
+    if info.is_square:
+        out.append("square")
+    if info.is_cube:
+        out.append("cube")
+    if info.is_triangular:
+        out.append("triangular")
+    if info.is_fibonacci:
+        out.append("fibonacci")
+    if info.is_mersenne:
+        out.append("mersenne")
+
+    if info.abundance == "完全数":
+        out.append("perfect")
+    elif info.abundance == "過剰数":
+        out.append("abundant")
+    elif info.abundance == "不足数":
+        out.append("deficient")
+
+    return [k for k in PROPERTY_FILTER_ORDER if k in out]
+
+
+def build_web_index() -> dict:
+    lore = _load_number_lore()
+    records: list[dict] = []
+
+    for n in range(1000):
+        info = build_info(n)
+        lore_filters = _lore_filters_for_number(n, lore)
+        property_filters = _property_filters_for_info(info)
+        path = f"numbers/{n // 100}xx/{n:03d}.md"
+
+        entries = (lore.get("entries") or {}).get(str(n)) or []
+        snippets: list[str] = []
+        for item in entries:
+            if not isinstance(item, dict):
+                continue
+            text = str(item.get("text", "")).strip()
+            if text:
+                snippets.append(text)
+            if len(snippets) >= 2:
+                break
+
+        search_fields = [
+            str(n),
+            f"{n:03d}",
+            info.jp_kanji,
+            info.jp_daiji,
+            info.jp_reading,
+            info.en_words,
+            " ".join(LORE_FILTER_LABELS[k] for k in lore_filters),
+            " ".join(PROPERTY_FILTER_LABELS[k] for k in property_filters),
+            " ".join(snippets),
+        ]
+
+        records.append(
+            {
+                "n": n,
+                "id": f"{n:03d}",
+                "title": f"{n}（{n:03d}）",
+                "path": path,
+                "loreFilters": lore_filters,
+                "propertyFilters": property_filters,
+                "snippets": snippets,
+                "searchText": " ".join(x for x in search_fields if x).lower(),
+            }
+        )
+
+    return {
+        "generatedAt": datetime.now().isoformat(timespec="seconds"),
+        "filters": {
+            "lore": [{"key": k, "label": LORE_FILTER_LABELS[k]} for k in LORE_FILTER_ORDER],
+            "properties": [{"key": k, "label": PROPERTY_FILTER_LABELS[k]} for k in PROPERTY_FILTER_ORDER],
+        },
+        "numbers": records,
+    }
 
 
 def build_info(n: int) -> NumberInfo:
@@ -2044,6 +2204,26 @@ def render_readme() -> str:
             "- 内部リンクが壊れていないことを確認（例: `python tools/check_internal_links.py`）",
             "- main に反映後、タグ（例: `vYYYY.MM.DD`）を作成して GitHub Release を作成（差分/変更点を記載）",
             "",
+            "## Web版（GitHub Pages）",
+            "",
+            "このリポジトリには GitHub Pages で閲覧できる軽量ビューアーを同梱しています。",
+            "",
+            "- 入口: `index.html`",
+            "- 機能:",
+            "  - 数字一覧の検索（フリーワード）",
+            "  - いわれカテゴリ / 性質カテゴリの種類別フィルタ",
+            "  - 各数字ページ（Markdown）の本文表示",
+            "",
+            "### ローカル確認",
+            "",
+            "PowerShell 例:",
+            "",
+            "```powershell",
+            "python -m http.server 8000",
+            "```",
+            "",
+            "その後、`http://localhost:8000/` を開いて動作確認してください。",
+            "",
             "## 参考リンク",
             "",
             "- Wikipedia 数の記事（例）: https://ja.wikipedia.org/wiki/31",
@@ -2201,6 +2381,10 @@ def main() -> None:
     # Entry points
     write_file(ROOT / "index.md", render_index())
     write_file(ROOT / "README.md", render_readme())
+    write_file(
+        ROOT / "assets" / "numbers-index.json",
+        json.dumps(build_web_index(), ensure_ascii=False, indent=2) + "\n",
+    )
 
 
 if __name__ == "__main__":

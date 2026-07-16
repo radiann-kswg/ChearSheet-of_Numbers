@@ -76,6 +76,26 @@ python tools/generate_numbers.py --refresh-wikipedia
 - 内部リンクが壊れていないことを確認（例: `python tools/check_internal_links.py`）
 - main に反映後、タグ（例: `vYYYY.MM.DD`）を作成して GitHub Release を作成（差分/変更点を記載）
 
+## Web版（GitHub Pages）
+
+このリポジトリには GitHub Pages で閲覧できる軽量ビューアーを同梱しています。
+
+- 入口: `index.html`
+- 機能:
+  - 数字一覧の検索（フリーワード）
+  - いわれカテゴリ / 性質カテゴリの種類別フィルタ
+  - 各数字ページ（Markdown）の本文表示
+
+### ローカル確認
+
+PowerShell 例:
+
+```powershell
+python -m http.server 8000
+```
+
+その後、`http://localhost:8000/` を開いて動作確認してください。
+
 ## 参考リンク
 
 - Wikipedia 数の記事（例）: https://ja.wikipedia.org/wiki/31
