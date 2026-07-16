@@ -1,0 +1,872 @@
+{
+ "meta": {
+  "version": 1,
+  "created": "2026-07-16",
+  "purpose": "数秘・占術・名数など、科学的根拠のない『文化的ないわれ』のキュレーションデータ。生成スクリプト（generate_numbers.py）が読み込み、各ページの『数秘・占術・文化のいわれ』セクションに描画する。",
+  "policy": [
+   "断定を避け『〜とされる』の表記で要約し、一次情報（主に Wikipedia）へのリンクを付す。",
+   "性的・差別的・反社会的な含意を持つネットスラングは収録しない。",
+   "現役占術家の独自体系（数意学・数魂など）は著作権・独自性への配慮から収録しない。",
+   "長文転載をせず、事実の指摘＋参照リンクにとどめる（CC BY-SA 運用）。"
+  ],
+  "categories": {
+   "kikkyo": "吉凶・忌み数",
+   "folklore": "伝承・神話・名数",
+   "meisu": "番号のいわれ（スポーツ・社会・製品）",
+   "goro": "語呂合わせ・ポケベル・ネットスラング",
+   "fiction": "創作作品"
+  }
+ },
+ "notable_gematria": {
+  "13": {
+   "text": "ヘブライ語の אהבה（愛）と אחד（一つ）のゲマトリア値がともに 13 であることから、ユダヤの伝承で重視されるとされる。",
+   "url": "https://en.wikipedia.org/wiki/Gematria"
+  },
+  "18": {
+   "text": "ヘブライ語の חי（ハイ、『生命』）のゲマトリア値が 18 であることから、ユダヤ文化圏では吉数とされ、18 の倍数の寄付などの慣習があるとされる。",
+   "url": "https://en.wikipedia.org/wiki/Chai_(symbol)"
+  },
+  "26": {
+   "text": "神名 YHWH（יהוה）のゲマトリア値が 26（10+5+6+5）とされる。",
+   "url": "https://ja.wikipedia.org/wiki/ゲマトリア"
+  },
+  "32": {
+   "text": "カバラの文献『セフェル・イェツィラー』にいう『智慧の32の小径』（10 のセフィロト＋22 のヘブライ文字）に結び付けられるとされる。",
+   "url": "https://ja.wikipedia.org/wiki/セフェル・イェツィラー"
+  },
+  "45": {
+   "text": "ヘブライ語の אדם（アダム、『人』）のゲマトリア値が 45 とされる。",
+   "url": "https://en.wikipedia.org/wiki/Gematria"
+  },
+  "72": {
+   "text": "カバラの伝承にいう『神の72文字の名』（シェム・ハ＝メフォラシュ）に結び付けられるとされる。",
+   "url": "https://en.wikipedia.org/wiki/Shem_HaMephorash"
+  },
+  "86": {
+   "text": "ヘブライ語の אלהים（エロヒム、『神』）のゲマトリア値が 86 とされる。",
+   "url": "https://en.wikipedia.org/wiki/Gematria"
+  },
+  "358": {
+   "text": "ヘブライ語の משיח（マシアハ、『メシア』）のゲマトリア値が 358 とされる。",
+   "url": "https://en.wikipedia.org/wiki/Gematria"
+  },
+  "541": {
+   "text": "ヘブライ語の ישראל（イスラエル）のゲマトリア値が 541 とされる。",
+   "url": "https://en.wikipedia.org/wiki/Gematria"
+  },
+  "613": {
+   "text": "トーラーに含まれる戒律の総数『613 のミツヴォート』として知られ、ヘブライ語 תרי\"ג（タルヤグ）で表されるとされる。",
+   "url": "https://ja.wikipedia.org/wiki/ミツワー"
+  },
+  "666": {
+   "text": "『ヨハネの黙示録』の『獣の数字』666 は、皇帝ネロ（ネロン・カエサル）のヘブライ文字表記のゲマトリア値とする説が有力とされる。",
+   "url": "https://ja.wikipedia.org/wiki/獣の数字"
+  },
+  "786": {
+   "text": "南アジアのイスラム文化圏では、バスマラ（ビスミッラーの定型句）のアブジャド数価 786 が吉数として広く用いられるとされる。",
+   "url": "https://en.wikipedia.org/wiki/786_(number)"
+  },
+  "888": {
+   "text": "ギリシア語のイソプセフィア（ゲマトリアに相当）で ΙΗΣΟΥΣ（イエス）の値が 888 とされ、獣の数字 666 と対比されることがあるとされる。",
+   "url": "https://en.wikipedia.org/wiki/888_(number)"
+  }
+ },
+ "entries": {
+  "3": [
+   {
+    "cat": "folklore",
+    "text": "三種の神器・三本の矢・仏教の三宝・キリスト教の三位一体など、洋の東西を問わず『3』は聖数・安定の数とされる。",
+    "url": "https://ja.wikipedia.org/wiki/3"
+   },
+   {
+    "cat": "folklore",
+    "text": "名数としても日本三景・御三家・三大〇〇など、代表を三つ挙げる用法が非常に多い。",
+    "url": "https://ja.wikipedia.org/wiki/名数一覧"
+   },
+   {
+    "cat": "meisu",
+    "text": "プロ野球では長嶋茂雄（読売ジャイアンツ）の背番号 3 が永久欠番となっている。",
+    "url": "https://ja.wikipedia.org/wiki/永久欠番"
+   }
+  ],
+  "4": [
+   {
+    "cat": "kikkyo",
+    "text": "日本・中国・韓国などの漢字文化圏では『死』に通じるとして代表的な忌み数とされ、病院やホテルで 4 号室・4 階を設けない例がある（テトラフォビア）。",
+    "url": "https://ja.wikipedia.org/wiki/忌み数"
+   },
+   {
+    "cat": "folklore",
+    "text": "四天王・四季・四神（青龍・白虎・朱雀・玄武）・仏教の四苦など、『4』を単位とする名数も多い。",
+    "url": "https://ja.wikipedia.org/wiki/四天王"
+   }
+  ],
+  "5": [
+   {
+    "cat": "folklore",
+    "text": "中国の五行思想（木・火・土・金・水）や仏教の五大（地・水・火・風・空）など、世界の構成要素を五つに分ける思想が広く見られる。",
+    "url": "https://ja.wikipedia.org/wiki/五行思想"
+   },
+   {
+    "cat": "meisu",
+    "text": "オリンピックのシンボル『五輪』は五大陸を表すとされる。",
+    "url": "https://ja.wikipedia.org/wiki/オリンピックシンボル"
+   }
+  ],
+  "6": [
+   {
+    "cat": "folklore",
+    "text": "六歌仙・六曜（先勝・友引・先負・仏滅・大安・赤口）・六道など、『6』を単位とする伝統的な名数がある。",
+    "url": "https://ja.wikipedia.org/wiki/六曜"
+   }
+  ],
+  "7": [
+   {
+    "cat": "kikkyo",
+    "text": "西洋では『ラッキーセブン』として代表的な幸運の数とされる。野球の 7 回の攻撃に由来する説が知られる。",
+    "url": "https://ja.wikipedia.org/wiki/ラッキーセブン"
+   },
+   {
+    "cat": "folklore",
+    "text": "七福神・七草・初七日・世界の七不思議など、聖数『7』にちなむ伝承・名数は洋の東西で非常に多い。",
+    "url": "https://ja.wikipedia.org/wiki/七福神"
+   },
+   {
+    "cat": "meisu",
+    "text": "サッカーでは背番号 7 がウイング・攻撃の名手の番号とされることが多い（C. ロナウド、ベッカムら）。",
+    "url": "https://ja.wikipedia.org/wiki/背番号_(サッカー)"
+   },
+   {
+    "cat": "fiction",
+    "text": "『007』はジェームズ・ボンドのコードネームとして世界的に知られる（ダブルオーセブン）。",
+    "url": "https://ja.wikipedia.org/wiki/ジェームズ・ボンド"
+   }
+  ],
+  "8": [
+   {
+    "cat": "kikkyo",
+    "text": "日本では漢字の『八』が末広がりで縁起が良いとされる。中国語圏では『發（発財）』に発音が通じるため最上の吉数とされ、電話番号や車のナンバーで高値が付く例が知られる。",
+    "url": "https://ja.wikipedia.org/wiki/8"
+   },
+   {
+    "cat": "folklore",
+    "text": "八百万の神・八岐大蛇・八咫鏡など、日本神話では『8』は『多数・無数』を表す聖数とされる。",
+    "url": "https://ja.wikipedia.org/wiki/八百万の神"
+   },
+   {
+    "cat": "goro",
+    "text": "中国のネットスラングでは『88』が『拜拜（バイバイ）』の発音に通じ、別れの挨拶として使われるとされる。",
+    "url": "https://en.wikipedia.org/wiki/Chinese_Internet_slang"
+   }
+  ],
+  "9": [
+   {
+    "cat": "kikkyo",
+    "text": "日本では『苦』に通じるとして忌み数とされる一方、中国では最大の陽数かつ『久』に通じる吉数とされ、故宮の九龍壁など皇帝の数として用いられた。",
+    "url": "https://ja.wikipedia.org/wiki/忌み数"
+   }
+  ],
+  "10": [
+   {
+    "cat": "folklore",
+    "text": "モーセの十戒・十干など、『10』を単位とする宗教的・伝統的名数がある。",
+    "url": "https://ja.wikipedia.org/wiki/モーセの十戒"
+   },
+   {
+    "cat": "meisu",
+    "text": "サッカーでは背番号 10 がエースナンバーとされる（ペレ、マラドーナ、メッシら）。",
+    "url": "https://ja.wikipedia.org/wiki/背番号_(サッカー)"
+   }
+  ],
+  "12": [
+   {
+    "cat": "folklore",
+    "text": "十二支・黄道十二宮（十二星座）・オリュンポス十二神・イスラエル十二部族など、『12』は暦・神話の基本単位として世界的に用いられる。",
+    "url": "https://ja.wikipedia.org/wiki/十二支"
+   }
+  ],
+  "13": [
+   {
+    "cat": "kikkyo",
+    "text": "西洋では代表的な忌み数とされ、『13日の金曜日』や、13 階を設けないビルの例が知られる（トリスカイデカフォビア）。最後の晩餐の 13 人に由来する説などがある。",
+    "url": "https://ja.wikipedia.org/wiki/13_(忌み数)"
+   }
+  ],
+  "14": [
+   {
+    "cat": "meisu",
+    "text": "プロ野球では沢村栄治（読売ジャイアンツ）の背番号 14 が日本初の永久欠番となった。サッカーではヨハン・クライフの番号としても知られる。",
+    "url": "https://ja.wikipedia.org/wiki/永久欠番"
+   }
+  ],
+  "16": [
+   {
+    "cat": "meisu",
+    "text": "プロ野球では川上哲治（読売ジャイアンツ）の背番号 16 が永久欠番となっている。",
+    "url": "https://ja.wikipedia.org/wiki/永久欠番"
+   }
+  ],
+  "17": [
+   {
+    "cat": "kikkyo",
+    "text": "イタリアでは 17 が忌み数とされる。ローマ数字 XVII のアナグラム VIXI（『我は生きた』＝死んだ）に通じるためとされる。",
+    "url": "https://ja.wikipedia.org/wiki/忌み数"
+   }
+  ],
+  "18": [
+   {
+    "cat": "meisu",
+    "text": "日本のプロ野球では背番号 18 がエースナンバーとされる（堀内恒夫、桑田真澄、松坂大輔、前田健太ら）。歌舞伎の『歌舞伎十八番（おはこ）』に由来する説が知られる。",
+    "url": "https://ja.wikipedia.org/wiki/エースナンバー"
+   },
+   {
+    "cat": "folklore",
+    "text": "歌舞伎十八番は市川宗家のお家芸 18 演目のことで、『十八番（おはこ）』の語源とされる。",
+    "url": "https://ja.wikipedia.org/wiki/歌舞伎十八番"
+   }
+  ],
+  "21": [
+   {
+    "cat": "meisu",
+    "text": "トランプのブラックジャックでは手札合計 21 が最強とされ、ゲーム名の由来となっている。",
+    "url": "https://ja.wikipedia.org/wiki/ブラックジャック"
+   }
+  ],
+  "23": [
+   {
+    "cat": "meisu",
+    "text": "バスケットボールではマイケル・ジョーダン（シカゴ・ブルズ）の背番号 23 が最も有名な番号の一つとされる。",
+    "url": "https://ja.wikipedia.org/wiki/マイケル・ジョーダン"
+   },
+   {
+    "cat": "goro",
+    "text": "語呂合わせで『ニッサン』と読めることから、日産自動車にちなむ数字として用いられることがある。",
+    "url": "https://ja.wikipedia.org/wiki/語呂合わせ"
+   }
+  ],
+  "24": [
+   {
+    "cat": "fiction",
+    "text": "米国のテレビドラマ『24 -TWENTY FOUR-』は 1 話＝1 時間のリアルタイム進行で知られる。",
+    "url": "https://ja.wikipedia.org/wiki/24_-TWENTY_FOUR-"
+   }
+  ],
+  "25": [
+   {
+    "cat": "folklore",
+    "text": "結婚 25 周年は銀婚式として祝われる。",
+    "url": "https://ja.wikipedia.org/wiki/結婚記念日"
+   }
+  ],
+  "29": [
+   {
+    "cat": "goro",
+    "text": "語呂合わせで『肉』と読めることから、毎月 29 日を『肉の日』とする販促が広く行われている。",
+    "url": "https://ja.wikipedia.org/wiki/語呂合わせ"
+   }
+  ],
+  "33": [
+   {
+    "cat": "folklore",
+    "text": "観音菩薩が 33 の姿に変化して衆生を救うという説に基づき、三十三間堂や西国三十三所など『33』は観音信仰の数とされる。",
+    "url": "https://ja.wikipedia.org/wiki/西国三十三所"
+   },
+   {
+    "cat": "kikkyo",
+    "text": "日本の厄年では、数え 33 歳が女性の大厄とされる（『散々』に通じるという語呂の説が知られる）。",
+    "url": "https://ja.wikipedia.org/wiki/厄年"
+   }
+  ],
+  "36": [
+   {
+    "cat": "folklore",
+    "text": "三十六歌仙や葛飾北斎『富嶽三十六景』、兵法三十六計など、『36』を単位とする名数がある。",
+    "url": "https://ja.wikipedia.org/wiki/三十六歌仙"
+   }
+  ],
+  "39": [
+   {
+    "cat": "goro",
+    "text": "語呂合わせで『サンキュー』『ミク』と読める。3 月 9 日は『ミクの日』とされ、バーチャル・シンガー初音ミクにちなむ数字として広く使われる。",
+    "url": "https://ja.wikipedia.org/wiki/初音ミク"
+   }
+  ],
+  "40": [
+   {
+    "cat": "folklore",
+    "text": "聖書では『40』が試練の期間を表す定型として現れる（ノアの洪水の 40 日、荒野の 40 年、イエスの断食 40 日など）とされる。",
+    "url": "https://ja.wikipedia.org/wiki/40"
+   }
+  ],
+  "42": [
+   {
+    "cat": "kikkyo",
+    "text": "日本では『死に』に通じるとして忌み数とされ、病室番号や車のナンバー（かつての 42-19『死に急ぐ』忌避など）で避けられる例が知られる。",
+    "url": "https://ja.wikipedia.org/wiki/忌み数"
+   },
+   {
+    "cat": "meisu",
+    "text": "MLB ではジャッキー・ロビンソンの背番号 42 が全球団共通の永久欠番となっている（毎年 4 月 15 日の『ジャッキー・ロビンソン・デー』には全選手が 42 を着用）。",
+    "url": "https://ja.wikipedia.org/wiki/ジャッキー・ロビンソン"
+   },
+   {
+    "cat": "fiction",
+    "text": "ダグラス・アダムズ『銀河ヒッチハイク・ガイド』では、『生命、宇宙、そして万物についての究極の疑問の答え』が 42 とされ、IT・SF 文化の定番ネタとなっている。",
+    "url": "https://ja.wikipedia.org/wiki/生命、宇宙、そして万物についての究極の疑問の答え"
+   }
+  ],
+  "43": [
+   {
+    "cat": "kikkyo",
+    "text": "『死産』に通じるとして、産科などで 43 号室が避けられる例があるとされる。",
+    "url": "https://ja.wikipedia.org/wiki/忌み数"
+   }
+  ],
+  "46": [
+   {
+    "cat": "meisu",
+    "text": "乃木坂46・櫻坂46・日向坂46 など、『坂道シリーズ』のアイドルグループ名に用いられている。",
+    "url": "https://ja.wikipedia.org/wiki/坂道シリーズ"
+   }
+  ],
+  "47": [
+   {
+    "cat": "folklore",
+    "text": "赤穂事件の四十七士（忠臣蔵）にちなむ数として知られる。日本の都道府県の数（47）でもある。",
+    "url": "https://ja.wikipedia.org/wiki/赤穂事件"
+   }
+  ],
+  "48": [
+   {
+    "cat": "meisu",
+    "text": "AKB48 をはじめとする『48 グループ』のグループ名に用いられている。相撲の決まり手の伝統的な総称『四十八手』としても知られる。",
+    "url": "https://ja.wikipedia.org/wiki/AKB48"
+   }
+  ],
+  "49": [
+   {
+    "cat": "kikkyo",
+    "text": "『死苦』『始終苦』に通じるとして忌み数とされる。一方、仏教では死後 49 日間を中陰とし、四十九日の法要を営む。",
+    "url": "https://ja.wikipedia.org/wiki/中陰"
+   },
+   {
+    "cat": "goro",
+    "text": "ポケベル語では『至急』の意味で使われたとされる。",
+    "url": "https://ja.wikipedia.org/wiki/ポケットベル"
+   }
+  ],
+  "50": [
+   {
+    "cat": "folklore",
+    "text": "結婚 50 周年は金婚式として祝われる。",
+    "url": "https://ja.wikipedia.org/wiki/結婚記念日"
+   }
+  ],
+  "51": [
+   {
+    "cat": "meisu",
+    "text": "イチロー（オリックス・マリナーズ）の背番号 51 として日本で広く知られる。米ネバダ州の機密軍事施設『エリア51』の名でも知られる。",
+    "url": "https://ja.wikipedia.org/wiki/イチロー"
+   }
+  ],
+  "53": [
+   {
+    "cat": "folklore",
+    "text": "歌川広重『東海道五十三次』で知られる、東海道の宿場の数である。",
+    "url": "https://ja.wikipedia.org/wiki/東海道五十三次"
+   }
+  ],
+  "55": [
+   {
+    "cat": "meisu",
+    "text": "松井秀喜（読売ジャイアンツ・ヤンキース）の背番号 55 として知られる（王貞治のシーズン本塁打記録 55 本に由来するとされる）。",
+    "url": "https://ja.wikipedia.org/wiki/松井秀喜"
+   }
+  ],
+  "57": [
+   {
+    "cat": "meisu",
+    "text": "米ハインツ社のスローガン『57 Varieties』により、同社を象徴する数字として知られる（ケチャップの瓶の『57』の刻印）。",
+    "url": "https://en.wikipedia.org/wiki/H._J._Heinz_Company"
+   }
+  ],
+  "60": [
+   {
+    "cat": "folklore",
+    "text": "干支（十干十二支）が一巡する 60 年目を『還暦』として祝う。結婚 60 周年はダイヤモンド婚式とされる。",
+    "url": "https://ja.wikipedia.org/wiki/還暦"
+   }
+  ],
+  "64": [
+   {
+    "cat": "folklore",
+    "text": "『易経』の六十四卦の数として知られる。",
+    "url": "https://ja.wikipedia.org/wiki/六十四卦"
+   },
+   {
+    "cat": "meisu",
+    "text": "ゲーム機『NINTENDO64』の名前の由来（64 ビット CPU）としても知られる。",
+    "url": "https://ja.wikipedia.org/wiki/NINTENDO64"
+   }
+  ],
+  "66": [
+   {
+    "cat": "meisu",
+    "text": "米国の旧国道『ルート66』は『マザーロード』と呼ばれ、歌や映画の題材として文化的な象徴となっている。",
+    "url": "https://ja.wikipedia.org/wiki/国道66号線_(アメリカ合衆国)"
+   }
+  ],
+  "70": [
+   {
+    "cat": "folklore",
+    "text": "数え 70 歳の長寿祝いは『古希』とされる（杜甫の詩『人生七十古来稀なり』に由来）。",
+    "url": "https://ja.wikipedia.org/wiki/古希"
+   }
+  ],
+  "76": [
+   {
+    "cat": "meisu",
+    "text": "NBA のフィラデルフィア・76ers のチーム名は、アメリカ独立宣言の 1776 年にちなむとされる。",
+    "url": "https://ja.wikipedia.org/wiki/フィラデルフィア・76ers"
+   }
+  ],
+  "77": [
+   {
+    "cat": "folklore",
+    "text": "数え 77 歳の長寿祝いは『喜寿』とされる（『喜』の草書体が七十七と読めることに由来）。",
+    "url": "https://ja.wikipedia.org/wiki/賀寿"
+   }
+  ],
+  "80": [
+   {
+    "cat": "folklore",
+    "text": "数え 80 歳の長寿祝いは『傘寿』とされる（『傘』の略字が八十と読めることに由来）。ジュール・ヴェルヌ『八十日間世界一周』でも知られる。",
+    "url": "https://ja.wikipedia.org/wiki/賀寿"
+   }
+  ],
+  "86": [
+   {
+    "cat": "meisu",
+    "text": "トヨタのスポーツカー『86（ハチロク）』および旧型カローラレビン/スプリンタートレノ（AE86）の通称として知られる。",
+    "url": "https://ja.wikipedia.org/wiki/トヨタ・86"
+   },
+   {
+    "cat": "fiction",
+    "text": "漫画『頭文字D』の主人公の車 AE86、アニメ『86－エイティシックス－』など創作作品でも用いられる。",
+    "url": "https://ja.wikipedia.org/wiki/頭文字D"
+   }
+  ],
+  "88": [
+   {
+    "cat": "folklore",
+    "text": "数え 88 歳の長寿祝いは『米寿』とされる（『米』の字を分解すると八十八になることに由来）。四国八十八箇所の霊場の数でもある。",
+    "url": "https://ja.wikipedia.org/wiki/米寿"
+   },
+   {
+    "cat": "meisu",
+    "text": "ピアノの鍵盤数（88 鍵）、そして全天の星座の数（88 星座）としても知られる。",
+    "url": "https://ja.wikipedia.org/wiki/星座"
+   }
+  ],
+  "89": [
+   {
+    "cat": "goro",
+    "text": "語呂合わせで『野球（やきゅう）』『白（はく）』などと読める。",
+    "url": "https://ja.wikipedia.org/wiki/語呂合わせ"
+   }
+  ],
+  "90": [
+   {
+    "cat": "folklore",
+    "text": "数え 90 歳の長寿祝いは『卒寿』とされる（『卒』の略字『卆』が九十と読めることに由来）。",
+    "url": "https://ja.wikipedia.org/wiki/賀寿"
+   }
+  ],
+  "95": [
+   {
+    "cat": "meisu",
+    "text": "『Windows 95』は 1995 年発売の OS で、パソコンの一般家庭への普及を象徴する製品名として知られる。",
+    "url": "https://ja.wikipedia.org/wiki/Microsoft_Windows_95"
+   }
+  ],
+  "98": [
+   {
+    "cat": "meisu",
+    "text": "『Windows 98』のほか、日本では NEC の『PC-9800 シリーズ（キューハチ）』の通称としても知られる。",
+    "url": "https://ja.wikipedia.org/wiki/PC-9800シリーズ"
+   }
+  ],
+  "99": [
+   {
+    "cat": "folklore",
+    "text": "数え 99 歳の長寿祝いは『白寿』とされる（『百』から『一』を取ると『白』になることに由来）。",
+    "url": "https://ja.wikipedia.org/wiki/賀寿"
+   },
+   {
+    "cat": "meisu",
+    "text": "NHL ではウェイン・グレツキーの背番号 99 が全球団共通の永久欠番となっている。",
+    "url": "https://ja.wikipedia.org/wiki/ウェイン・グレツキー"
+   }
+  ],
+  "100": [
+   {
+    "cat": "folklore",
+    "text": "百物語・お百度参り・百人一首など、『100』は『満ちた数』として伝承・名数に多用される。数え 100 歳の祝いは『百寿・紀寿』とされる。",
+    "url": "https://ja.wikipedia.org/wiki/百物語"
+   }
+  ],
+  "101": [
+   {
+    "cat": "fiction",
+    "text": "ディズニー映画『101匹わんちゃん』のタイトルで知られる。",
+    "url": "https://ja.wikipedia.org/wiki/101匹わんちゃん"
+   }
+  ],
+  "104": [
+   {
+    "cat": "meisu",
+    "text": "日本の電話番号案内サービスの番号として知られる。",
+    "url": "https://ja.wikipedia.org/wiki/電話番号案内"
+   }
+  ],
+  "108": [
+   {
+    "cat": "folklore",
+    "text": "仏教で人間の煩悩の数とされ、除夜の鐘を 108 回撞く由来となっている。数珠の珠数（108 珠）にも用いられる。数え 108 歳の長寿祝いは『茶寿』。",
+    "url": "https://ja.wikipedia.org/wiki/煩悩"
+   }
+  ],
+  "110": [
+   {
+    "cat": "meisu",
+    "text": "日本の警察への緊急通報用電話番号である。",
+    "url": "https://ja.wikipedia.org/wiki/110番"
+   }
+  ],
+  "111": [
+   {
+    "cat": "folklore",
+    "text": "数え 111 歳の長寿祝いは『皇寿』とされる（『皇』を白（99）＋一＋十＋一と分解することに由来）。",
+    "url": "https://ja.wikipedia.org/wiki/賀寿"
+   },
+   {
+    "cat": "kikkyo",
+    "text": "クリケットでは 111 とその倍数が『ネルソン』と呼ばれ、不吉なスコアとされる俗信がある。",
+    "url": "https://en.wikipedia.org/wiki/Nelson_(cricket)"
+   }
+  ],
+  "117": [
+   {
+    "cat": "meisu",
+    "text": "日本の時報サービスの電話番号である。1995 年 1 月 17 日の阪神・淡路大震災を指す『1.17』としても用いられる。",
+    "url": "https://ja.wikipedia.org/wiki/時報"
+   }
+  ],
+  "118": [
+   {
+    "cat": "meisu",
+    "text": "日本の海上保安庁への緊急通報用電話番号である。",
+    "url": "https://ja.wikipedia.org/wiki/118番"
+   }
+  ],
+  "119": [
+   {
+    "cat": "meisu",
+    "text": "日本の消防・救急への緊急通報用電話番号である。11 月 9 日は『119番の日』とされる。",
+    "url": "https://ja.wikipedia.org/wiki/119番"
+   }
+  ],
+  "120": [
+   {
+    "cat": "folklore",
+    "text": "数え 120 歳は還暦を二巡した『大還暦』とされる。",
+    "url": "https://ja.wikipedia.org/wiki/賀寿"
+   }
+  ],
+  "168": [
+   {
+    "cat": "kikkyo",
+    "text": "中国語圏では『一路發（ずっと発財）』に発音が通じるとして吉数とされ、価格や電話番号で好まれる例が知られる。",
+    "url": "https://en.wikipedia.org/wiki/Chinese_numerology"
+   }
+  ],
+  "171": [
+   {
+    "cat": "meisu",
+    "text": "日本の災害用伝言ダイヤルの番号である（『いない』の語呂合わせとされる）。",
+    "url": "https://ja.wikipedia.org/wiki/災害用伝言ダイヤル"
+   }
+  ],
+  "177": [
+   {
+    "cat": "meisu",
+    "text": "日本の天気予報電話サービスの番号として知られる（2023 年終了）。",
+    "url": "https://ja.wikipedia.org/wiki/177"
+   }
+  ],
+  "180": [
+   {
+    "cat": "meisu",
+    "text": "ダーツで 1 スロー（3 投）の最高得点であり、『ワンエイティ』と呼ばれる。",
+    "url": "https://ja.wikipedia.org/wiki/ダーツ"
+   }
+  ],
+  "189": [
+   {
+    "cat": "meisu",
+    "text": "日本の児童相談所虐待対応ダイヤルの番号である（『いちはやく』の語呂合わせとされる）。",
+    "url": "https://ja.wikipedia.org/wiki/児童相談所全国共通ダイヤル"
+   }
+  ],
+  "226": [
+   {
+    "cat": "folklore",
+    "text": "1936 年 2 月 26 日に起きたクーデター未遂事件『二・二六事件』を指す数字として用いられる。",
+    "url": "https://ja.wikipedia.org/wiki/二・二六事件"
+   }
+  ],
+  "233": [
+   {
+    "cat": "goro",
+    "text": "中国のネットスラングでは『233』が『大笑い』を表すとされる（掲示板『猫扑』の笑いの絵文字番号 233 に由来）。",
+    "url": "https://en.wikipedia.org/wiki/Chinese_Internet_slang"
+   }
+  ],
+  "246": [
+   {
+    "cat": "meisu",
+    "text": "東京と神奈川を結ぶ国道 246 号は『ニーヨンロク』の通称で親しまれ、歌の題材にもなっている。",
+    "url": "https://ja.wikipedia.org/wiki/国道246号"
+   }
+  ],
+  "300": [
+   {
+    "cat": "folklore",
+    "text": "テルモピュライの戦いのスパルタ兵 300 人の伝承で知られ、映画『300〈スリーハンドレッド〉』の題材となった。ボウリングのパーフェクトスコアでもある。",
+    "url": "https://ja.wikipedia.org/wiki/テルモピュライの戦い"
+   }
+  ],
+  "315": [
+   {
+    "cat": "goro",
+    "text": "語呂合わせで『サイコー（最高）』と読めることから、ポジティブな意味の数字として用いられることがある。",
+    "url": "https://ja.wikipedia.org/wiki/語呂合わせ"
+   }
+  ],
+  "334": [
+   {
+    "cat": "goro",
+    "text": "2005 年の日本シリーズの合計スコア『33-4』に由来するインターネットミームとして、野球ファンの間で知られる。",
+    "url": "https://ja.wikipedia.org/wiki/2005年の日本シリーズ"
+   }
+  ],
+  "346": [
+   {
+    "cat": "goro",
+    "text": "語呂合わせで『みしろ』などと読まれ、ゲーム『アイドルマスター シンデレラガールズ』の346（みしろ）プロダクションの名称に用いられている。",
+    "url": "https://ja.wikipedia.org/wiki/アイドルマスター_シンデレラガールズ"
+   }
+  ],
+  "358": [
+   {
+    "cat": "kikkyo",
+    "text": "近年の日本では『縁起の良い数字』として車のナンバープレートで人気が高いとされる（聖書・風水など由来の説明は諸説あり、確たる典拠はない）。",
+    "url": "https://ja.wikipedia.org/wiki/希望ナンバー制度"
+   }
+  ],
+  "360": [
+   {
+    "cat": "meisu",
+    "text": "円の全周を 360 度とする単位系は古代バビロニアの六十進法に由来するとされる。スバル・360（てんとう虫）などの製品名にも用いられる。",
+    "url": "https://ja.wikipedia.org/wiki/度_(角度)"
+   }
+  ],
+  "365": [
+   {
+    "cat": "folklore",
+    "text": "1 年の日数（平年 365 日）として、『1 年中・毎日』を象徴する数字に用いられる。",
+    "url": "https://ja.wikipedia.org/wiki/365日"
+   }
+  ],
+  "451": [
+   {
+    "cat": "fiction",
+    "text": "レイ・ブラッドベリ『華氏451度』は紙が燃え始める温度とされる 451°F をタイトルに用いた SF 小説として知られる。",
+    "url": "https://ja.wikipedia.org/wiki/華氏451度"
+   }
+  ],
+  "500": [
+   {
+    "cat": "folklore",
+    "text": "五百羅漢（釈迦の弟子 500 人）の名数として知られる。フィアット・500 や新幹線 500 系など、乗り物の名称にも多く用いられる。",
+    "url": "https://ja.wikipedia.org/wiki/五百羅漢"
+   }
+  ],
+  "501": [
+   {
+    "cat": "meisu",
+    "text": "リーバイスのジーンズ『501』は、製品番号がそのままブランドの代名詞となった例として知られる。",
+    "url": "https://ja.wikipedia.org/wiki/リーバイ・ストラウス"
+   }
+  ],
+  "515": [
+   {
+    "cat": "folklore",
+    "text": "1932 年 5 月 15 日に起きた『五・一五事件』を指す数字として用いられる。",
+    "url": "https://ja.wikipedia.org/wiki/五・一五事件"
+   }
+  ],
+  "520": [
+   {
+    "cat": "goro",
+    "text": "中国語圏のネットスラングでは『520』が『我愛你（愛してる）』の発音に通じるとされ、5 月 20 日は『告白の日』として知られる。",
+    "url": "https://en.wikipedia.org/wiki/Chinese_Internet_slang"
+   }
+  ],
+  "555": [
+   {
+    "cat": "goro",
+    "text": "タイのネットスラングでは『5』の発音『ハー』から『555』が笑い声（ハハハ）を表すとされる。",
+    "url": "https://en.wikipedia.org/wiki/Thai_language"
+   },
+   {
+    "cat": "fiction",
+    "text": "特撮『仮面ライダー555（ファイズ）』のタイトルに用いられている。米国の映画・ドラマでは架空の電話番号の局番 555 が定番として使われる。",
+    "url": "https://ja.wikipedia.org/wiki/仮面ライダー555"
+   }
+  ],
+  "573": [
+   {
+    "cat": "goro",
+    "text": "語呂合わせで『コナミ』と読めることから、ゲーム会社コナミを象徴する数字として知られる（ゲーム内スコアや価格・電話番号などに多用）。",
+    "url": "https://ja.wikipedia.org/wiki/コナミグループ"
+   }
+  ],
+  "634": [
+   {
+    "cat": "goro",
+    "text": "語呂合わせで『むさし（武蔵）』と読めることから、東京スカイツリーの高さ 634m の由来となった。",
+    "url": "https://ja.wikipedia.org/wiki/東京スカイツリー"
+   }
+  ],
+  "666": [
+   {
+    "cat": "kikkyo",
+    "text": "『ヨハネの黙示録』の『獣の数字』として西洋で代表的な忌み数とされる（ヘキサコシオイヘキセコンタヘキサフォビア）。一方、中国のネットスラングでは『溜溜溜（すごい）』に通じる褒め言葉として使われるとされる。",
+    "url": "https://ja.wikipedia.org/wiki/獣の数字"
+   }
+  ],
+  "753": [
+   {
+    "cat": "folklore",
+    "text": "『七五三』は 3 歳・5 歳・7 歳の子どもの成長を祝う日本の年中行事で、11 月 15 日に行われる。",
+    "url": "https://ja.wikipedia.org/wiki/七五三"
+   }
+  ],
+  "765": [
+   {
+    "cat": "goro",
+    "text": "語呂合わせで『ナムコ』と読めることから、ゲーム会社ナムコ（バンダイナムコ）ゆかりの数字として知られ、『アイドルマスター』の 765（ナムコ）プロダクションの名称にも用いられている。",
+    "url": "https://ja.wikipedia.org/wiki/アイドルマスター"
+   }
+  ],
+  "777": [
+   {
+    "cat": "kikkyo",
+    "text": "『ラッキーセブン』のゾロ目としてスロットマシンの大当たり図柄に用いられ、幸運の象徴とされる。ボーイング 777 の機種名でも知られる。",
+    "url": "https://ja.wikipedia.org/wiki/777"
+   }
+  ],
+  "800": [
+   {
+    "cat": "folklore",
+    "text": "日本語の『八百（やお）』は『非常に多い』ことを表し、八百屋・嘘八百・大江戸八百八町などの表現に用いられる。",
+    "url": "https://ja.wikipedia.org/wiki/八百万の神"
+   }
+  ],
+  "808": [
+   {
+    "cat": "meisu",
+    "text": "ローランドのリズムマシン『TR-808』は、ヒップホップやダンスミュージックの音色を象徴する『808（エイト・オー・エイト）』として音楽文化に定着している。江戸の町数を表す『八百八町』でも知られる。",
+    "url": "https://ja.wikipedia.org/wiki/ローランド・TR-808"
+   }
+  ],
+  "831": [
+   {
+    "cat": "goro",
+    "text": "語呂合わせで『野菜（やさい）』と読めることから、8 月 31 日は『野菜の日』とされる。",
+    "url": "https://ja.wikipedia.org/wiki/語呂合わせ"
+   }
+  ],
+  "874": [
+   {
+    "cat": "goro",
+    "text": "語呂合わせで『花屋』などと読まれることがある。",
+    "url": "https://ja.wikipedia.org/wiki/語呂合わせ"
+   }
+  ],
+  "888": [
+   {
+    "cat": "kikkyo",
+    "text": "中国語圏では 8 のゾロ目として最上級の吉数とされ、電話番号・ナンバープレートで高額取引される例が知られる。",
+    "url": "https://en.wikipedia.org/wiki/Chinese_numerology"
+   }
+  ],
+  "889": [
+   {
+    "cat": "goro",
+    "text": "ポケベル語では『早く（は8や8く9）』の意味で使われたとされる。",
+    "url": "https://ja.wikipedia.org/wiki/ポケットベル"
+   }
+  ],
+  "909": [
+   {
+    "cat": "meisu",
+    "text": "ローランドのリズムマシン『TR-909』は、テクノ・ハウスの音色を象徴する機材として音楽文化に定着している。",
+    "url": "https://ja.wikipedia.org/wiki/ローランド・TR-909"
+   }
+  ],
+  "911": [
+   {
+    "cat": "meisu",
+    "text": "米国などの緊急通報用電話番号であり、2001 年 9 月 11 日の同時多発テロを指す『9.11』としても用いられる。ポルシェ・911 の車名でも知られる。",
+    "url": "https://ja.wikipedia.org/wiki/911"
+   }
+  ],
+  "996": [
+   {
+    "cat": "meisu",
+    "text": "中国の IT 業界の長時間労働慣行『996 工作制』（朝 9 時〜夜 9 時・週 6 日）を指す語として知られる。",
+    "url": "https://ja.wikipedia.org/wiki/996工作制"
+   }
+  ],
+  "999": [
+   {
+    "cat": "fiction",
+    "text": "松本零士『銀河鉄道999』のタイトルナンバーとして知られる。英国などの緊急通報用電話番号でもある。",
+    "url": "https://ja.wikipedia.org/wiki/銀河鉄道999"
+   }
+  ],
+  "0": [
+   {
+    "cat": "folklore",
+    "text": "『無』を表す数としてインドで概念化され、哲学・宗教でも『空（くう）』と結び付けて語られることがある。",
+    "url": "https://ja.wikipedia.org/wiki/0"
+   }
+  ],
+  "1": [
+   {
+    "cat": "meisu",
+    "text": "プロ野球では王貞治（読売ジャイアンツ）の背番号 1 が永久欠番となっている。『ナンバーワン』として第一・最高を象徴する数字でもある。",
+    "url": "https://ja.wikipedia.org/wiki/王貞治"
+   }
+  ],
+  "2": [
+   {
+    "cat": "folklore",
+    "text": "陰陽思想の『陰と陽』、対（つい）の概念など、二元性を象徴する数とされる。",
+    "url": "https://ja.wikipedia.org/wiki/陰陽"
+   }
+  ]
+ }
+}

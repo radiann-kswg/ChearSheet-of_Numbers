@@ -1065,6 +1065,268 @@ def _load_wolfram_enrichment() -> dict:
     return _WOLFRAM_ENRICHMENT_CACHE
 
 
+# ---------------------------------------------------------------------------
+# 数秘・占術・文化のいわれ（number_lore_v1.json + 機械導出）
+# ---------------------------------------------------------------------------
+
+NUMBER_LORE_PATH = Path(__file__).resolve().parent / "number_lore_v1.json"
+_NUMBER_LORE_CACHE: dict | None = None
+
+
+def _load_number_lore() -> dict:
+    global _NUMBER_LORE_CACHE
+    if _NUMBER_LORE_CACHE is None:
+        try:
+            _NUMBER_LORE_CACHE = json.loads(
+                NUMBER_LORE_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            _NUMBER_LORE_CACHE = {}
+    return _NUMBER_LORE_CACHE
+
+
+# 元素の系列（Wolfram ElementData "Series"）の日本語訳
+ELEMENT_SERIES_JA = {
+    "Nonmetal": "非金属",
+    "NobleGas": "貴ガス",
+    "AlkaliMetal": "アルカリ金属",
+    "AlkalineEarthMetal": "アルカリ土類金属",
+    "Metalloid": "半金属",
+    "Chalcogen": "カルコゲン（酸素族）",
+    "Halogen": "ハロゲン",
+    "PoorMetal": "ポスト遷移金属（その他の金属）",
+    "TransitionMetal": "遷移金属",
+    "Lanthanide": "ランタノイド",
+    "Actinide": "アクチノイド",
+}
+
+# 星座名（Wolfram Constellation エンティティ）の日本語訳
+CONSTELLATION_JA = {
+    "Pegasus": "ペガスス座",
+    "Pisces": "うお座",
+    "Andromeda": "アンドロメダ座",
+    "Sculptor": "ちょうこくしつ座",
+    "Cetus": "くじら座",
+    "Phoenix": "ほうおう座",
+    "Tucana": "きょしちょう座",
+    "Cassiopeia": "カシオペヤ座",
+    "Triangulum": "さんかく座",
+    "Aries": "おひつじ座",
+    "Eridanus": "エリダヌス座",
+    "Fornax": "ろ座",
+    "Hydrus": "みずへび座",
+    "Horologium": "とけい座",
+    "Cepheus": "ケフェウス座",
+    "Perseus": "ペルセウス座",
+}
+
+# 現代数秘術（ピタゴラス式）の還元値の一般的な象意（要約）
+NUMEROLOGY_MEANINGS = {
+    1: "自立・開拓・リーダーシップ",
+    2: "協調・受容・調和",
+    3: "創造・表現・楽観",
+    4: "安定・実務・基盤",
+    5: "自由・変化・冒険",
+    6: "愛情・調和・責任",
+    7: "探求・内省・分析",
+    8: "実現・豊かさ・力",
+    9: "完結・博愛・統合",
+    11: "直感・霊感（マスターナンバー）",
+    22: "理想の具現化（マスターナンバー）",
+    33: "無条件の愛（マスターナンバー）",
+}
+
+# エンジェルナンバー解釈でよく用いられる各桁の一般的な象意（要約）
+ANGEL_DIGIT_MEANINGS = {
+    0: "無限の可能性・始まり",
+    1: "新しい始まり・行動",
+    2: "調和・信頼",
+    3: "創造性・成長",
+    4: "安定・基盤",
+    5: "変化・転機",
+    6: "愛情・バランス",
+    7: "内省・幸運",
+    8: "豊かさ・循環",
+    9: "完結・奉仕",
+}
+
+LORE_CATEGORY_ORDER = ["kikkyo", "folklore", "meisu", "goro", "fiction"]
+LORE_CATEGORY_JA = {
+    "kikkyo": "吉凶・忌み数",
+    "folklore": "伝承・神話・名数",
+    "meisu": "番号のいわれ",
+    "goro": "語呂合わせ・スラング",
+    "fiction": "創作作品",
+}
+LORE_MAX_PER_CATEGORY = 3
+
+NUMEROLOGY_URL = "https://ja.wikipedia.org/wiki/%E6%95%B0%E7%A7%98%E8%A1%93"
+ANGEL_NUMBER_URL = "https://en.wikipedia.org/wiki/Angel_numbers"
+HEBREW_NUMERALS_URL = "https://en.wikipedia.org/wiki/Hebrew_numerals"
+GEMATRIA_URL = "https://ja.wikipedia.org/wiki/%E3%82%B2%E3%83%9E%E3%83%88%E3%83%AA%E3%82%A2"
+IMIKAZU_URL = "https://ja.wikipedia.org/wiki/%E5%BF%8C%E3%81%BF%E6%95%B0"
+
+
+def numerology_reduction(n: int) -> tuple[list[int], int]:
+    """ピタゴラス式の数字根還元。マスターナンバー（11/22/33）で停止する。
+
+    戻り値: (還元の途中経過のリスト（n 自身を含む）, 最終値)
+    """
+    chain = [n]
+    cur = n
+    while cur > 9 and cur not in (11, 22, 33):
+        cur = sum(int(ch) for ch in str(cur))
+        chain.append(cur)
+    return chain, cur
+
+
+_HEBREW_VALUES = [
+    (400, "ת"), (300, "ש"), (200, "ר"), (100, "ק"),
+    (90, "צ"), (80, "פ"), (70, "ע"), (60, "ס"), (50, "נ"),
+    (40, "מ"), (30, "ל"), (20, "כ"), (10, "י"),
+    (9, "ט"), (8, "ח"), (7, "ז"), (6, "ו"), (5, "ה"),
+    (4, "ד"), (3, "ג"), (2, "ב"), (1, "א"),
+]
+
+
+def hebrew_numeral(n: int) -> str | None:
+    """1〜999 の標準的なヘブライ数字表記（ゲマトリア数価の逆引き）。
+
+    15/16 は神名を避ける慣習に従い ט״ו / ט״ז とする。
+    区切り記号は慣例どおり、1文字ならゲレシュ（׳）、複数文字なら
+    最終文字の前にゲルシャイム（״）を挿入する。
+    """
+    if not (1 <= n <= 999):
+        return None
+    letters: list[str] = []
+    rest = n
+    for value, letter in _HEBREW_VALUES:
+        while rest >= value:
+            # 15/16 の特別処理（十の位＋一の位の部分にのみ適用）
+            if rest == 15:
+                letters.extend(["ט", "ו"])
+                rest = 0
+                break
+            if rest == 16:
+                letters.extend(["ט", "ז"])
+                rest = 0
+                break
+            letters.append(letter)
+            rest -= value
+    if not letters:
+        return None
+    if len(letters) == 1:
+        return letters[0] + "׳"
+    return "".join(letters[:-1]) + "״" + letters[-1]
+
+
+def _numerology_lines(n: int) -> list[str]:
+    """全数字に一律で付与する、機械導出のいわれ（数秘・エンジェル・ヘブライ数字）。"""
+    lines: list[str] = []
+
+    # 数秘術（現代数秘/カバラ式の還元値）
+    if n == 0:
+        lines.append(
+            "- **数秘術**: 0 は伝統的な数秘術では還元の対象外とされることが多く、"
+            f"『無』や『可能性そのもの』を表すとされる（[数秘術]({NUMEROLOGY_URL})参照）"
+        )
+    else:
+        chain, root = numerology_reduction(n)
+        if len(chain) == 1:
+            chain_text = f"{n}"
+        else:
+            steps = []
+            for i in range(len(chain) - 1):
+                digits = " + ".join(list(str(chain[i])))
+                steps.append(f"{digits} = {chain[i + 1]}")
+            chain_text = " → ".join(steps)
+        meaning = NUMEROLOGY_MEANINGS.get(root, "")
+        master_note = "（マスターナンバーとして還元を止める流儀がある）" if root in (
+            11, 22, 33) else ""
+        lines.append(
+            f"- **数秘術（現代数秘/カバラ式の還元値）**: {chain_text} — "
+            f"還元値 **{root}** の象意は「{meaning}」とされる{master_note}"
+            f"（[数秘術]({NUMEROLOGY_URL})参照）"
+        )
+
+    # エンジェルナンバー（一般的な解釈の要約）
+    digits = [int(ch) for ch in str(n)]
+    uniq_digits: list[int] = []
+    for d in digits:
+        if d not in uniq_digits:
+            uniq_digits.append(d)
+    digit_parts = "・".join(
+        f"{d}（{ANGEL_DIGIT_MEANINGS[d]}）" for d in uniq_digits)
+    if len(digits) == 1:
+        angel_body = f"「{n}」は {digit_parts} の意味を持つとされる"
+    elif len(set(digits)) == 1:
+        angel_body = (
+            f"「{n}」は {digit_parts} が {len(digits)} 桁重なるゾロ目で、"
+            "特に強い意味を持つとされる"
+        )
+    elif len(digits) == 3 and digits[0] == digits[2]:
+        angel_body = (
+            f"「{n}」は桁の {digit_parts} を組み合わせて読むとされ、"
+            "左右対称のミラーナンバーとして言及されることがある"
+        )
+    else:
+        angel_body = f"「{n}」は桁の {digit_parts} を組み合わせて読むとされる"
+    lines.append(
+        f"- **エンジェルナンバー**: {angel_body}"
+        f"（一般的な解釈の要約。[Angel numbers]({ANGEL_NUMBER_URL})参照）"
+    )
+
+    # ヘブライ数字（ゲマトリア数価の逆引き表記）
+    heb = hebrew_numeral(n)
+    if heb is not None:
+        lines.append(
+            f"- **ヘブライ数字（ゲマトリア数価）**: {n} は {heb} と表記される"
+            f"（[Hebrew numerals]({HEBREW_NUMERALS_URL})参照）"
+        )
+
+    return lines
+
+
+def render_lore_section_lines(n: int) -> list[str]:
+    """『数秘・占術・文化のいわれ』セクションの本文行を生成する。"""
+    lore = _load_number_lore()
+    lines: list[str] = [
+        "このセクションは、数秘術・占い・語呂合わせなど**科学的根拠のない文化的な『いわれ』**を、"
+        "百科事典的な要約として収録するものです（効果や真偽を主張するものではありません）。"
+        "断定を避け、一次情報へのリンクを付します。\n",
+        "### 数秘術・エンジェルナンバー（機械導出）\n",
+        *_numerology_lines(n),
+    ]
+
+    # ゲマトリア（著名な数価）
+    gem = (lore.get("notable_gematria") or {}).get(str(n))
+    if gem and isinstance(gem, dict) and gem.get("text"):
+        lines.append("\n### ゲマトリア（著名な数価）\n")
+        url = gem.get("url", GEMATRIA_URL)
+        lines.append(f"- {gem['text']}（参照: {url}）")
+
+    # キュレーション項目（カテゴリごとに上限付きで描画）
+    entries = (lore.get("entries") or {}).get(str(n)) or []
+    by_cat: dict[str, list[dict]] = {}
+    for item in entries:
+        if not isinstance(item, dict) or not item.get("text"):
+            continue
+        by_cat.setdefault(item.get("cat", "meisu"), []).append(item)
+
+    curated_lines: list[str] = []
+    for cat in LORE_CATEGORY_ORDER:
+        items = by_cat.get(cat) or []
+        for item in items[:LORE_MAX_PER_CATEGORY]:
+            url = item.get("url")
+            ref = f"（参照: {url}）" if url else ""
+            curated_lines.append(
+                f"- **{LORE_CATEGORY_JA.get(cat, cat)}**: {item['text']}{ref}")
+    if curated_lines:
+        lines.append("\n### 吉凶・伝承・名数・語呂（キュレーション）\n")
+        lines.extend(curated_lines)
+
+    return lines
+
+
 def build_info(n: int) -> NumberInfo:
     factors = prime_factorization(n)
     factorization = format_factorization(n, factors)
@@ -1277,25 +1539,54 @@ def render_number_page(
             )
 
     science_lines: list[str] = []
+    _enrich = _load_wolfram_enrichment()
     if info.atomic_element is not None:
         # Wikipedia の各元素ページは安定しているので、最小限の一次資料リンクとして付ける
+        _el = (_enrich.get("elements") or {}).get(str(n)) or {}
+        _el_bits: list[str] = []
+        _series = ELEMENT_SERIES_JA.get(_el.get("series") or "")
+        _period = _el.get("period")
+        if _series and _period:
+            _el_bits.append(f"第{_period}周期の{_series}に属する元素")
+        elif _series:
+            _el_bits.append(f"{_series}に属する元素")
+        _aw = _el.get("atomic_weight")
+        if isinstance(_aw, (int, float)):
+            _aw_text = f"{_aw:g}"
+            _el_bits.append(f"標準原子量はおよそ {_aw_text}")
+        _dy = _el.get("discovery_year")
+        if isinstance(_dy, int):
+            if _dy < 1000:
+                _el_bits.append("古代から知られる")
+            else:
+                _el_bits.append(f"{_dy}年発見")
+        _sym = _el.get("symbol")
+        _sym_text = f"（{_sym}）" if _sym else ""
+        _detail = "。" + "、".join(_el_bits) if _el_bits else ""
         science_lines.append(
-            f"- **原子番号**: {info.atomic_element}（[元素](https://ja.wikipedia.org/wiki/{info.atomic_element})）"
+            f"- **原子番号**: {info.atomic_element}{_sym_text}{_detail}"
+            f"（[元素](https://ja.wikipedia.org/wiki/{info.atomic_element})参照。詳細データ: Wolfram Knowledgebase）"
         )
 
     if n >= 1:
-        _enrich = _load_wolfram_enrichment()
         _mp_name = (_enrich.get("minor_planets") or {}).get(str(n))
         if _mp_name:
+            _mp_year = (_enrich.get(
+                "minor_planet_discovery_years") or {}).get(str(n))
+            _mp_year_text = f"{_mp_year}年に発見された、" if isinstance(
+                _mp_year, int) else ""
             science_lines.append(
-                f"- **小惑星**: 小惑星番号 {n} の小惑星は「{_mp_name}」"
+                f"- **小惑星**: 小惑星番号 {n} の小惑星は、{_mp_year_text}「{_mp_name}」"
                 f"（一次情報: [JPL Small-Body Database](https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr={n})"
-                "。名称データ: Wolfram Knowledgebase）"
+                "。名称・発見年データ: Wolfram Knowledgebase）"
             )
         _ngc = _enrich.get("ngc") or {}
         if _ngc:
             _ngc_type = (_ngc.get("exceptions") or {}).get(
                 str(n), _ngc.get("default", "Galaxy"))
+            _const = (_enrich.get("ngc_constellations") or {}).get(str(n))
+            _const_ja = CONSTELLATION_JA.get(_const or "", _const)
+            _const_text = f"{_const_ja}にある" if _const_ja else ""
             if _ngc_type == "?":
                 science_lines.append(
                     f"- **天文（NGC）**: NGC {n} は同定が難しい・欠番とされることがある番号です"
@@ -1303,8 +1594,8 @@ def render_number_page(
                 )
             else:
                 science_lines.append(
-                    f"- **天文（NGC）**: NGC {n} は{NGC_TYPE_JA.get(_ngc_type, _ngc_type)}に分類される天体です"
-                    f"（[NGC天体一覧]({NGC_LIST_URL})参照。分類データ: Wolfram Knowledgebase）"
+                    f"- **天文（NGC）**: NGC {n} は{_const_text}{NGC_TYPE_JA.get(_ngc_type, _ngc_type)}に分類される天体です"
+                    f"（[NGC天体一覧]({NGC_LIST_URL})参照。分類・星座データ: Wolfram Knowledgebase）"
                 )
 
     if not science_lines:
@@ -1629,6 +1920,8 @@ def render_number_page(
             *tech_code_lines,
             "\n## 文化・言語（例）\n",
             *culture_lines,
+            "\n## 数秘・占術・文化のいわれ\n",
+            *render_lore_section_lines(n),
             "\n## 参考\n",
             *refs,
             "\n## 出典・ライセンス\n",
@@ -1681,12 +1974,15 @@ def render_readme() -> str:
             "- 個別ページ: `numbers/` 配下（基本は 1 数字 = 1 ファイル）",
             "- 一部の規格・コード情報は Wikidata（CC0）から自動取得して補強します",
             "- Wikipedia（日本語）の冒頭（概要）に加え、『性質』『その他』から短い引用を抽出して要点の入口を補強します（長文転載はしません）",
+            "- 元素・小惑星・NGC 天体の詳細（分類・原子量・発見年・星座など）は Wolfram Knowledgebase 由来のデータ（`tools/wolfram_enrichment_v1.json`）で補強します",
+            "- 数秘術・エンジェルナンバー・吉凶・語呂合わせなどの『文化的ないわれ』も収録します（機械導出＋`tools/number_lore_v1.json` のキュレーション。科学的根拠のない伝承である旨を明記）",
             "",
             "## 方針（公開に耐えるための注意）",
             "",
             "- 外部サイトの本文を長文転載しません（要約＋参照リンク中心）。",
             "- 引用する場合は短くし、出典 URL を必ず添えます。",
             "- 数式表記を KaTeX に整形して掲載する場合は、改変がある旨（例: 『短い引用・整形』）を明記します。",
+            "- 数秘・占術などのいわれは断定を避け（『〜とされる』）、科学的事実と区別して掲載します。性的・差別的・反社会的な含意のスラングや、現役占術家の独自体系（数意学・数魂など）は収録しません。",
             "",
             "## ライセンス",
             "",

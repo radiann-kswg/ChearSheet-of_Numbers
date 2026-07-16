@@ -49,6 +49,8 @@
 │   ├── wikidata_cc0.py      # Wikidata（CC0）連携
 │   ├── wikipedia_ja_pins_v1.json                 # 引用ピン留め設定
 │   ├── wikipedia_ja_importance_overrides_v1.json # 重要度閾値の上書き設定
+│   ├── wolfram_enrichment_v1.json                # Wolfram Knowledgebase 由来の科学データ（元素/小惑星/NGC）
+│   ├── number_lore_v1.json                       # 数秘・占術・名数など『文化的ないわれ』のキュレーションデータ
 │   └── _cache/              # 取得キャッシュ（通常 Git 管理しない）
 ├── _wip/                    # 作業途中メモ（公開してよい内容のみ）
 ├── .private/                # 非公開メモ（コミット対象外の下書き等）
@@ -88,6 +90,10 @@ VS Code 上で **KaTeX** 記法（拡張機能 `jeff-tian.markdown-katex`、`.vs
 - Wikipedia は CC BY-SA。本リポジトリ（CC BY-SA 4.0）と整合は取りやすいが、無制限の転載は避け「要約＋リンク」を基本とする。
 - Wikidata の構造化データは CC0。規格・コード等の"事実データ"は Wikidata 由来で自動拡充し、一次情報へリンクする。
 - 数学的性質の記述（素因数分解・約数・トーシェント等）を追加・変更した場合は、可能なら計算機（Python / Wolfram 等)で検算する。
+- 元素・小惑星・NGC 等の科学データの詳細（分類・原子量・発見年・星座など）は Wolfram Knowledgebase 由来（`tools/wolfram_enrichment_v1.json` に同梱）とし、出典を明記する。
+- 数秘術・エンジェルナンバー・吉凶・語呂合わせ等の「文化的ないわれ」は『数秘・占術・文化のいわれ』セクションに集約する。科学的根拠のない伝承である旨を各ページで明記し、断定を避ける（『〜とされる』）。
+  - 機械導出（数秘還元値・エンジェルナンバー・ヘブライ数字）は `generate_numbers.py`、キュレーション項目は `tools/number_lore_v1.json` を編集する（生成物の手編集をしない）。
+  - **収録しないもの**: 性的・差別的・反社会的な含意を持つネットスラング、現役占術家の独自体系（数意学・数魂など。著作権・独自性への配慮）。
 
 ## 生成ワークフロー
 
