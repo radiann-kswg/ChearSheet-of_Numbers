@@ -1,5 +1,8 @@
-# Sample workflow for building and deploying a Jekyll site to GitHub Pages
-name: Deploy Jekyll with GitHub Pages dependencies preinstalled
+# Numbers Lore Viewer（index.html + assets/ + 生の Markdown）を静的サイトとして GitHub Pages にデプロイする。
+# 注意: Jekyll ではビルドしない。ビューアーは .md をそのまま fetch して描画するため、
+# Jekyll を通すと .md が .html に変換されて動作しなくなる（過去には Wikipedia 引用内の
+# `{{` が Liquid 構文エラーを起こしビルドが失敗していた）。
+name: Deploy static site (Numbers Lore Viewer) to GitHub Pages
 
 on:
   # Runs on pushes targeting the default branch
@@ -22,19 +25,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Build job
+  # Build job（静的コピーのみ。Jekyll は使わない）
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Build with Jekyll
-        uses: actions/jekyll-build-pages@v1
-        with:
-          source: ./
-          destination: ./_site
+      - name: Prepare static site
+        run: |
+          mkdir -p _site
+          rsync -a \
+            --exclude '_site' \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '.vscode' \
+            --exclude '.private' \
+            --exclude '.venv' \
+            --exclude '_template' \
+            --exclude '_wip' \
+            --exclude 'tools' \
+            --exclude 'AGENTS.md' \
+            --exclude 'CLAUDE.md' \
+            ./ _site/
+          touch _site/.nojekyll
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
 

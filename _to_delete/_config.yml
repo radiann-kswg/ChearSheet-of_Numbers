@@ -1,0 +1,20 @@
+# GitHub Pages（Jekyll）の設定
+title: CheatSheet of Numbers (0-999)
+description: 0〜999 の数字について、数学的・科学的・文化的な性質といわれをまとめたチートシート集
+lang: ja
+timezone: Asia/Tokyo
+
+markdown: kramdown
+theme: jekyll-theme-primer
+
+# サイトに含めないもの（生成スクリプト・作業メモ・テンプレート等）
+exclude:
+  - tools/
+  - _wip/
+  - _template/
+  - .private/
+  - .venv/
+  - .vscode/
+  - vendor/
+  - AGENTS.md
+  - CLAUDE.md

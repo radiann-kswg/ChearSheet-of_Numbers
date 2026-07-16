@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
-from datetime import datetime
 import math
 from dataclasses import dataclass
 import html
@@ -351,6 +350,14 @@ def _split_math_prefix(text: str) -> tuple[str, str] | None:
     if not re.search(r"\d", prefix) or not re.search(r"[=^×÷√π]", prefix):
         return None
     return prefix, remainder
+
+
+def _katex_balanced(s: str) -> bool:
+    """KaTeX 式として明らかに破綻していないか（\\left/\\right・波括弧の均衡）を確認する。"""
+    return (
+        s.count("\\left") == s.count("\\right")
+        and s.count("{") == s.count("}")
+    )
 
 
 def _to_katex_math(expr: str) -> str:
@@ -995,49 +1002,128 @@ def _prime_factor_shape(n: int) -> tuple[int, int]:
     return total, distinct
 
 
-def extra_math_properties(n: int) -> list[str]:
-    """よく知られた数の性質のうち、機械的に導出できるものを列挙する（0〜999）。"""
+def _happy_chain(n: int) -> list[int]:
+    chain = [n]
+    seen: set[int] = set()
+    while n != 1 and n not in seen:
+        seen.add(n)
+        n = sum(int(c) ** 2 for c in str(n))
+        chain.append(n)
+    return chain
 
-    props: list[str] = []
+
+def _flat_prime_factors_katex(n: int) -> str:
+    """素因数を重複込みで平坦に並べた KaTeX 式（例: 57 → '3 \\times 19'）。"""
+    parts: list[str] = []
+    for p, e in prime_factorization(n):
+        parts.extend([str(p)] * e)
+    return " \\times ".join(parts)
+
+
+def extra_math_flag_details(n: int) -> list[tuple[str, str]]:
+    """機械導出できる数の性質を（フラグ名, 定義＋この数での根拠）のペアで列挙する。"""
+
+    details: list[tuple[str, str]] = []
     if n < 1:
-        return props
+        return details
 
     prime = is_prime(n)
     rev = int(str(n)[::-1])
 
     if n >= 10 and _is_palindrome_number(n):
-        props.append("回文素数" if prime else "回文数")
+        if prime:
+            details.append(("回文素数", "逆から読んでも同じ数になる素数。"))
+        else:
+            details.append(("回文数", "逆から読んでも同じ数になる数。"))
     if prime and rev != n and is_prime(rev):
-        props.append(f"エマープ（逆順の {rev} も素数）")
+        details.append(
+            ("エマープ", f"逆順に読むと異なる素数になる素数。{n} の逆順 {rev} も素数。"))
     if prime:
-        if is_prime(n - 2) or is_prime(n + 2):
-            props.append("双子素数")
+        partners = [p for p in (n - 2, n + 2) if p >= 2 and is_prime(p)]
+        if partners:
+            ptxt = " と ".join(str(p) for p in partners)
+            details.append(("双子素数", f"差が 2 の素数の組を成す素数。{n} は {ptxt} と組になる。"))
         if is_prime(2 * n + 1):
-            props.append(f"ソフィー・ジェルマン素数（$2 \\times {n}+1={2 * n + 1}$ も素数）")
-        if n >= 5 and is_prime((n - 1) // 2) and (n - 1) % 2 == 0:
-            props.append(f"安全素数（$({n}-1)/2={(n - 1) // 2}$ も素数）")
+            details.append(
+                ("ソフィー・ジェルマン素数",
+                 f"$2p+1$ も素数となる素数 $p$。$2 \\times {n} + 1 = {2 * n + 1}$ も素数。"))
+        if n >= 5 and (n - 1) % 2 == 0 and is_prime((n - 1) // 2):
+            details.append(
+                ("安全素数", f"$(p-1)/2$ も素数となる素数 $p$。$({n}-1)/2 = {(n - 1) // 2}$ も素数。"))
     else:
         total, distinct = _prime_factor_shape(n)
         if total == 2:
-            props.append("半素数（2つの素数の積）")
+            details.append(
+                ("半素数", f"ちょうど 2 つの素数の積で表される合成数。${n} = {_flat_prime_factors_katex(n)}$。"))
         if total == 3 and distinct == 3:
-            props.append("楔数（相異なる3つの素数の積）")
+            details.append(
+                ("楔数", f"相異なる 3 つの素数の積で表される合成数。${n} = {_flat_prime_factors_katex(n)}$。"))
     ds = sum(int(c) for c in str(n))
     if ds > 0 and n % ds == 0:
-        props.append(f"ハーシャッド数（各位の和 {ds} で割り切れる）")
+        details.append(
+            ("ハーシャッド数", f"各位の和で割り切れる数。${n} \\div {ds} = {n // ds}$。"))
     if _is_happy(n):
-        props.append("ハッピー数")
+        chain = _happy_chain(n)
+        det = "各位の 2 乗の和を繰り返し取ると 1 に到達する数。"
+        if 1 < len(chain) <= 8:
+            det += "（" + " → ".join(str(x) for x in chain) + "）"
+        details.append(("ハッピー数", det))
     if n in _HIGHLY_COMPOSITE:
-        props.append("高度合成数")
+        details.append(("高度合成数", "それ未満のどの自然数よりも約数の個数が多い数。"))
     if n in _FACTORIALS:
-        props.append("階乗数")
+        k = {1: 1, 2: 2, 6: 3, 24: 4, 120: 5, 720: 6}[n]
+        details.append(("階乗数", f"階乗で表される数。${n} = {k}!$。"))
     if n in _LUCAS:
-        props.append("リュカ数")
+        details.append(("リュカ数", "リュカ数列（2, 1, 3, 4, 7, 11, …。隣接 2 項の和で定まる）の項。"))
     if n in _PELL:
-        props.append("ペル数")
+        details.append(
+            ("ペル数", "ペル数列（1, 2, 5, 12, 29, …。$P_k = 2P_{k-1} + P_{k-2}$ で定まる）の項。"))
     if n in _CATALAN:
-        props.append("カタラン数")
-    return props
+        details.append(("カタラン数", "カタラン数列（1, 2, 5, 14, 42, …。組合せ論に頻出）の項。"))
+    return details
+
+
+def extra_math_properties(n: int) -> list[str]:
+    """（後方互換）フラグ名のみのリストを返す。"""
+    return [name for name, _ in extra_math_flag_details(n)]
+
+
+def math_flag_details(n: int, info: "NumberInfo") -> list[tuple[str, str]]:
+    """概要の数学フラグ全種と、定義＋この数での根拠のペアを返す。"""
+    details: list[tuple[str, str]] = []
+    if info.is_square:
+        k = math.isqrt(n)
+        details.append(("平方数", f"整数の 2 乗で表される数。${n} = {k}^2$。"))
+    if info.is_cube:
+        k = round(n ** (1 / 3))
+        details.append(("立方数", f"整数の 3 乗で表される数。${n} = {k}^3$。"))
+    if info.is_triangular:
+        k = (math.isqrt(8 * n + 1) - 1) // 2
+        if k >= 1:
+            details.append(
+                ("三角数", f"1 から連続する自然数の和で表される数。${n} = 1 + 2 + \\cdots + {k}$（第 {k} 三角数）。"))
+        else:
+            details.append(("三角数", "三角数列の初項（$T_0 = 0$）とされる。"))
+    if info.is_fibonacci:
+        details.append(
+            ("フィボナッチ数", "フィボナッチ数列（0, 1, 1, 2, 3, 5, 8, …。隣接 2 項の和で定まる）の項。"))
+    if info.is_mersenne:
+        k = n.bit_length()
+        details.append(
+            ("メルセンヌ数", f"$2^k - 1$ の形の数。${n} = 2^{{{k}}} - 1$（広義: 指数 {k} が素数とは限らない）。"))
+    if info.abundance and info.sum_divisors is not None:
+        s = info.sum_divisors
+        if info.abundance == "完全数":
+            details.append(
+                ("完全数", f"約数の総和が自身の 2 倍に等しい数。$\\sigma({n}) = {s} = 2 \\times {n}$。"))
+        elif info.abundance == "過剰数":
+            details.append(
+                ("過剰数", f"約数の総和が自身の 2 倍を上回る数。$\\sigma({n}) = {s} \\gt {2 * n} = 2 \\times {n}$。"))
+        else:
+            details.append(
+                ("不足数", f"約数の総和が自身の 2 倍に満たない数。$\\sigma({n}) = {s} \\lt {2 * n} = 2 \\times {n}$。"))
+    details.extend(extra_math_flag_details(n))
+    return details
 
 
 # --- Wolfram Knowledgebase 由来の科学データ（tools/wolfram_enrichment_v1.json） ---
@@ -1159,58 +1245,6 @@ LORE_CATEGORY_JA = {
     "fiction": "創作作品",
 }
 LORE_MAX_PER_CATEGORY = 3
-
-LORE_FILTER_LABELS = {
-    "numerology": "数秘・エンジェル",
-    "gematria": "ゲマトリア",
-    "kikkyo": "吉凶・忌み数",
-    "folklore": "伝承・神話・名数",
-    "meisu": "番号のいわれ",
-    "goro": "語呂合わせ・スラング",
-    "fiction": "創作作品",
-}
-
-LORE_FILTER_ORDER = [
-    "numerology",
-    "gematria",
-    "kikkyo",
-    "folklore",
-    "meisu",
-    "goro",
-    "fiction",
-]
-
-PROPERTY_FILTER_LABELS = {
-    "special": "特殊（0/1）",
-    "prime": "素数",
-    "composite": "合成数",
-    "even": "偶数",
-    "odd": "奇数",
-    "square": "平方数",
-    "cube": "立方数",
-    "triangular": "三角数",
-    "fibonacci": "フィボナッチ数",
-    "mersenne": "メルセンヌ数",
-    "perfect": "完全数",
-    "abundant": "過剰数",
-    "deficient": "不足数",
-}
-
-PROPERTY_FILTER_ORDER = [
-    "special",
-    "prime",
-    "composite",
-    "even",
-    "odd",
-    "square",
-    "cube",
-    "triangular",
-    "fibonacci",
-    "mersenne",
-    "perfect",
-    "abundant",
-    "deficient",
-]
 
 NUMEROLOGY_URL = "https://ja.wikipedia.org/wiki/%E6%95%B0%E7%A7%98%E8%A1%93"
 ANGEL_NUMBER_URL = "https://en.wikipedia.org/wiki/Angel_numbers"
@@ -1339,6 +1373,26 @@ def _numerology_lines(n: int) -> list[str]:
     return lines
 
 
+def lore_flag_names(n: int) -> list[str]:
+    """概要フラグ用: このページの『数秘・占術・文化のいわれ』に収録される種類名の一覧。"""
+    lore = _load_number_lore()
+    names = ["数秘術", "エンジェルナンバー"]
+    if 1 <= n <= 999:
+        names.append("ヘブライ数字")
+    if (lore.get("notable_gematria") or {}).get(str(n)):
+        names.append("ゲマトリア（著名な数価）")
+    entries = (lore.get("entries") or {}).get(str(n)) or []
+    cats_present: list[str] = []
+    for item in entries:
+        c = item.get("cat") if isinstance(item, dict) else None
+        if c and c not in cats_present:
+            cats_present.append(c)
+    for cat in LORE_CATEGORY_ORDER:
+        if cat in cats_present:
+            names.append(LORE_CATEGORY_JA.get(cat, cat))
+    return names
+
+
 def render_lore_section_lines(n: int) -> list[str]:
     """『数秘・占術・文化のいわれ』セクションの本文行を生成する。"""
     lore = _load_number_lore()
@@ -1378,113 +1432,6 @@ def render_lore_section_lines(n: int) -> list[str]:
         lines.extend(curated_lines)
 
     return lines
-
-
-def _lore_filters_for_number(n: int, lore: dict) -> list[str]:
-    out: list[str] = ["numerology"]
-
-    notable_gematria = lore.get("notable_gematria") or {}
-    if str(n) in notable_gematria:
-        out.append("gematria")
-
-    entries = (lore.get("entries") or {}).get(str(n)) or []
-    for item in entries:
-        if not isinstance(item, dict):
-            continue
-        cat = item.get("cat")
-        if cat in LORE_CATEGORY_ORDER and cat not in out:
-            out.append(cat)
-
-    return [k for k in LORE_FILTER_ORDER if k in out]
-
-
-def _property_filters_for_info(info: NumberInfo) -> list[str]:
-    out: list[str] = []
-
-    if info.n in (0, 1):
-        out.append("special")
-    elif info.is_prime:
-        out.append("prime")
-    else:
-        out.append("composite")
-
-    out.append("even" if info.is_even else "odd")
-
-    if info.is_square:
-        out.append("square")
-    if info.is_cube:
-        out.append("cube")
-    if info.is_triangular:
-        out.append("triangular")
-    if info.is_fibonacci:
-        out.append("fibonacci")
-    if info.is_mersenne:
-        out.append("mersenne")
-
-    if info.abundance == "完全数":
-        out.append("perfect")
-    elif info.abundance == "過剰数":
-        out.append("abundant")
-    elif info.abundance == "不足数":
-        out.append("deficient")
-
-    return [k for k in PROPERTY_FILTER_ORDER if k in out]
-
-
-def build_web_index() -> dict:
-    lore = _load_number_lore()
-    records: list[dict] = []
-
-    for n in range(1000):
-        info = build_info(n)
-        lore_filters = _lore_filters_for_number(n, lore)
-        property_filters = _property_filters_for_info(info)
-        path = f"numbers/{n // 100}xx/{n:03d}.md"
-
-        entries = (lore.get("entries") or {}).get(str(n)) or []
-        snippets: list[str] = []
-        for item in entries:
-            if not isinstance(item, dict):
-                continue
-            text = str(item.get("text", "")).strip()
-            if text:
-                snippets.append(text)
-            if len(snippets) >= 2:
-                break
-
-        search_fields = [
-            str(n),
-            f"{n:03d}",
-            info.jp_kanji,
-            info.jp_daiji,
-            info.jp_reading,
-            info.en_words,
-            " ".join(LORE_FILTER_LABELS[k] for k in lore_filters),
-            " ".join(PROPERTY_FILTER_LABELS[k] for k in property_filters),
-            " ".join(snippets),
-        ]
-
-        records.append(
-            {
-                "n": n,
-                "id": f"{n:03d}",
-                "title": f"{n}（{n:03d}）",
-                "path": path,
-                "loreFilters": lore_filters,
-                "propertyFilters": property_filters,
-                "snippets": snippets,
-                "searchText": " ".join(x for x in search_fields if x).lower(),
-            }
-        )
-
-    return {
-        "generatedAt": datetime.now().isoformat(timespec="seconds"),
-        "filters": {
-            "lore": [{"key": k, "label": LORE_FILTER_LABELS[k]} for k in LORE_FILTER_ORDER],
-            "properties": [{"key": k, "label": PROPERTY_FILTER_LABELS[k]} for k in PROPERTY_FILTER_ORDER],
-        },
-        "numbers": records,
-    }
 
 
 def build_info(n: int) -> NumberInfo:
@@ -1657,22 +1604,8 @@ def render_number_page(
 
     category_bits.append("偶数" if info.is_even else "奇数")
 
-    flags: list[str] = []
-    if info.is_square:
-        flags.append("平方数")
-    if info.is_cube:
-        flags.append("立方数")
-    if info.is_triangular:
-        flags.append("三角数")
-    if info.is_fibonacci:
-        flags.append("フィボナッチ数")
-    if info.is_mersenne:
-        flags.append("メルセンヌ数")
-
-    if info.abundance:
-        flags.append(info.abundance)
-
-    flag_text = " / ".join(flags) if flags else "（特記事項なし）"
+    flag_details = math_flag_details(n, info)
+    math_flag_names = [name for name, _ in flag_details]
 
     reps_lines = "\n".join(
         [f"- **{k}**: `{v}`" for k, v in info.representations.items()])
@@ -1692,11 +1625,10 @@ def render_number_page(
                 f"- **オイラーのトーシェント関数** $\\varphi({n})$: {info.totient}",
             ]
         )
-        extra_props = extra_math_properties(n)
-        if extra_props:
-            math_lines.append(
-                "- **その他の性質**: " + " / ".join(extra_props) + "（機械導出・検算済み）"
-            )
+    if flag_details:
+        math_lines.append("- **フラグの解説**（概要のフラグに対応。機械導出・検算済み）:")
+        for _fname, _fdetail in flag_details:
+            math_lines.append(f"  - **{_fname}**: {_fdetail}")
 
     science_lines: list[str] = []
     _enrich = _load_wolfram_enrichment()
@@ -1773,26 +1705,8 @@ def render_number_page(
         )
 
     wikipedia_points: list[str] = []
-    # 可能な範囲で、Wikipedia「性質」を置き換え可能な“機械的に導ける要点”を入れる
-    if info.is_prime:
-        wikipedia_points.append("- 素数（Wikipediaの『性質』参照）")
-    elif n in (0, 1):
-        wikipedia_points.append("- 0/1 は数論上の扱いに注意（Wikipedia参照）")
-    else:
-        wikipedia_points.append("- 合成数（Wikipediaの『性質』参照）")
-
-    if info.is_mersenne:
-        wikipedia_points.append("- メルセンヌ数（広義: $2^n-1$ 形。指数が素数とは限らない）")
-    if info.is_square:
-        wikipedia_points.append("- 平方数")
-    if info.is_cube:
-        wikipedia_points.append("- 立方数")
-    if info.is_triangular:
-        wikipedia_points.append("- 三角数")
-    if info.is_fibonacci:
-        wikipedia_points.append("- フィボナッチ数")
-    if info.abundance:
-        wikipedia_points.append(f"- {info.abundance}（Wikipedia参照）")
+    # 注: 分類（素数/合成数）や数学フラグの機械由来の要点は『数学的性質』の
+    # 「フラグの解説」に集約し、ここでは Wikipedia 固有の情報のみを載せる（重複回避）。
 
     intro_extract = (wikipedia_intros or {}).get(n)
     if intro_extract and _looks_like_number_wikipedia_intro(intro_extract):
@@ -1855,6 +1769,10 @@ def render_number_page(
                 if split:
                     prefix, remainder = split
                     normalized = _to_katex_math(prefix)
+                    if not _katex_balanced(normalized):
+                        # \left/\right や括弧が不均衡な壊れた式は整形しない（素の引用のまま）
+                        split = None
+                if split:
                     formatted_sentence = f"${normalized}${remainder}".strip()
                     notes: list[str] = ["表記を整形"]
                     if omitted:
@@ -1905,6 +1823,10 @@ def render_number_page(
             if split:
                 prefix, remainder = split
                 normalized = _to_katex_math(prefix)
+                if not _katex_balanced(normalized):
+                    # \left/\right や括弧が不均衡な壊れた式は整形しない（素の引用のまま）
+                    split = None
+            if split:
                 formatted_sentence = f"${normalized}${remainder}".strip()
                 notes: list[str] = ["表記を整形"]
                 if omitted:
@@ -2018,6 +1940,51 @@ def render_number_page(
         tech_code_lines.append(f"- 代表的な機能（目安）: {logic_hint}")
     tech_code_lines.append(f"- 一覧（一次情報への入口）: {LIST_7400_WIKIPEDIA_EN}")
 
+    # --- 概要の「フラグ」: このページに収録されている『いわれ』の種類を全域から列挙 ---
+    science_flag_names: list[str] = []
+    if info.atomic_element is not None:
+        science_flag_names.append(f"原子番号（{info.atomic_element}）")
+    if n >= 1:
+        if (_enrich.get("minor_planets") or {}).get(str(n)):
+            science_flag_names.append("小惑星")
+        _ngc_all = _enrich.get("ngc") or {}
+        if _ngc_all:
+            _t = (_ngc_all.get("exceptions") or {}).get(
+                str(n), _ngc_all.get("default", "Galaxy"))
+            if _t != "?":
+                science_flag_names.append(
+                    f"NGC天体（{NGC_TYPE_JA.get(_t, _t)}）")
+
+    code_flag_names: list[str] = []
+    if 100 <= n <= 599 and HTTP_STATUS_PAGES.get(n) is not None:
+        code_flag_names.append("HTTPステータスコード")
+    if wikidata is not None:
+        if wikidata.iso3166_numeric.get(n):
+            code_flag_names.append("ISO 3166-1")
+        if wikidata.tel_country_code.get(n):
+            code_flag_names.append("国番号（E.164）")
+    if n < 100 or LOGIC_74XX_HINTS.get(n) is not None:
+        code_flag_names.append("7400シリーズ")
+
+    lore_flags = lore_flag_names(n)
+
+    overview_flag_lines: list[str] = [
+        "- **フラグ（数学）**: "
+        + (" / ".join(math_flag_names) if math_flag_names else "（特記事項なし）")
+    ]
+    if science_flag_names:
+        overview_flag_lines.append(
+            "- **フラグ（科学・技術）**: " + " / ".join(science_flag_names))
+    if code_flag_names:
+        overview_flag_lines.append(
+            "- **フラグ（規格・コード）**: " + " / ".join(code_flag_names))
+    overview_flag_lines.append(
+        "- **フラグ（文化・いわれ）**: " + " / ".join(lore_flags))
+    overview_flag_lines.append(
+        "- 各フラグの詳しい解説は、ページ内の対応するセクション"
+        "（『数学的性質』のフラグの解説 / 『科学・技術』 / 『規格・コード』 / 『数秘・占術・文化のいわれ』）を参照してください（解説は各セクション 1 箇所に集約し、重複させません）。"
+    )
+
     refs = [
         f"- Wikipedia（日本語）: https://ja.wikipedia.org/wiki/{n}",
         f"- Wikipedia（英語）: https://en.wikipedia.org/wiki/{n}",
@@ -2054,14 +2021,14 @@ def render_number_page(
 
     title = f"# {n}（{n:03d}）\n"
 
-    return "\n".join(
+    content = "\n".join(
         [
             title,
             nav_line,
             f"> 分類: {' / '.join(category_bits)}\n",
             *repo_links_lines,
             "## 概要\n",
-            f"- **フラグ**: {flag_text}",
+            *overview_flag_lines,
             "\n## 数学的性質\n",
             *math_lines,
             "\n## 表記\n",
@@ -2069,7 +2036,8 @@ def render_number_page(
             "\n## Wikipedia（要点）\n",
             "Wikipedia の『性質』『その他』は有用な入口ですが、本文の長文転載は避け、要点のみ要約してリンクします。\n",
             "### 性質（要約）\n",
-            *wikipedia_points,
+            *(wikipedia_points if wikipedia_points else
+              ["- 機械導出できる分類・性質の解説は『数学的性質』のフラグの解説に集約しています（重複回避）。追加の要点は Wikipedia を参照。"]),
             "\n### その他（要約）\n",
             *(other_points if other_points else ["- （要約可能な関連が見つかったら追記）"]),
             "\n### Wikidata（CC0）\n",
@@ -2089,6 +2057,9 @@ def render_number_page(
             "",
         ]
     )
+    # GitHub Pages（Jekyll/Liquid）が `{{` / `{%` を構文として誤認して
+    # ビルドに失敗しないよう、表示に影響しない空白を挿入して無害化する。
+    return content.replace("{{", "{ {").replace("{%", "{ %")
 
 
 def render_index() -> str:
@@ -2131,6 +2102,7 @@ def render_readme() -> str:
             "0〜999 の数字について、数学的な性質と、科学/文化に関する一次情報への導線をまとめたチートシート集です。",
             "",
             "- 入口: [index.md](index.md)",
+            "- ブラウザ閲覧（GitHub Pages）: https://radiann-kswg.github.io/ChearSheet-of_Numbers/",
             "- 個別ページ: `numbers/` 配下（基本は 1 数字 = 1 ファイル）",
             "- 一部の規格・コード情報は Wikidata（CC0）から自動取得して補強します",
             "- Wikipedia（日本語）の冒頭（概要）に加え、『性質』『その他』から短い引用を抽出して要点の入口を補強します（長文転載はしません）",
@@ -2203,26 +2175,6 @@ def render_readme() -> str:
             "- 生成スクリプト/設定を更新 → `python tools/generate_numbers.py --wikipedia-sections` で全ページ再生成",
             "- 内部リンクが壊れていないことを確認（例: `python tools/check_internal_links.py`）",
             "- main に反映後、タグ（例: `vYYYY.MM.DD`）を作成して GitHub Release を作成（差分/変更点を記載）",
-            "",
-            "## Web版（GitHub Pages）",
-            "",
-            "このリポジトリには GitHub Pages で閲覧できる軽量ビューアーを同梱しています。",
-            "",
-            "- 入口: `index.html`",
-            "- 機能:",
-            "  - 数字一覧の検索（フリーワード）",
-            "  - いわれカテゴリ / 性質カテゴリの種類別フィルタ",
-            "  - 各数字ページ（Markdown）の本文表示",
-            "",
-            "### ローカル確認",
-            "",
-            "PowerShell 例:",
-            "",
-            "```powershell",
-            "python -m http.server 8000",
-            "```",
-            "",
-            "その後、`http://localhost:8000/` を開いて動作確認してください。",
             "",
             "## 参考リンク",
             "",
@@ -2381,10 +2333,16 @@ def main() -> None:
     # Entry points
     write_file(ROOT / "index.md", render_index())
     write_file(ROOT / "README.md", render_readme())
-    write_file(
-        ROOT / "assets" / "numbers-index.json",
-        json.dumps(build_web_index(), ensure_ascii=False, indent=2) + "\n",
-    )
+
+    # Numbers Lore Viewer（index.html / assets/）の検索インデックスを同期する
+    if (ROOT / "assets").is_dir():
+        try:
+            from build_viewer_index import write_viewer_index
+
+            path = write_viewer_index()
+            print(f"[info] viewer index updated: {path}")
+        except Exception as e:  # noqa: BLE001
+            print(f"[warn] viewer index update skipped: {e}")
 
 
 if __name__ == "__main__":

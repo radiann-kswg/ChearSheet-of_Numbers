@@ -36,6 +36,8 @@
 ├── .github/
 │   └── copilot-instructions.md  # Copilot 用ポインタ（編集しない）
 ├── index.md                 # 入口（0〜999 目次）
+├── index.html               # Numbers Lore Viewer（GitHub Pages の閲覧 UI）
+├── assets/                  # ビューアーの JS/CSS と検索インデックス（numbers-index.json は生成物）
 ├── README.md                # リポジトリ概要
 ├── numbers/                 # 各数字の個別ページ（基本は 1 数字 = 1 ファイル）
 │   ├── 0xx/                 # 000〜099
@@ -94,6 +96,11 @@ VS Code 上で **KaTeX** 記法（拡張機能 `jeff-tian.markdown-katex`、`.vs
 - 数秘術・エンジェルナンバー・吉凶・語呂合わせ等の「文化的ないわれ」は『数秘・占術・文化のいわれ』セクションに集約する。科学的根拠のない伝承である旨を各ページで明記し、断定を避ける（『〜とされる』）。
   - 機械導出（数秘還元値・エンジェルナンバー・ヘブライ数字）は `generate_numbers.py`、キュレーション項目は `tools/number_lore_v1.json` を編集する（生成物の手編集をしない）。
   - **収録しないもの**: 性的・差別的・反社会的な含意を持つネットスラング、現役占術家の独自体系（数意学・数魂など。著作権・独自性への配慮）。
+- 概要の「フラグ」は、そのページに収録されている『いわれ』の種類（数学/科学・技術/規格・コード/文化・いわれ）を全域から列挙する目次である。**各フラグの詳細な解説は対応セクション 1 箇所のみ**に置き、セクション間で解説を重複させない（数学フラグの定義＋根拠は『数学的性質』の「フラグの解説」に集約。Wikipedia『性質（要約）』には機械導出の分類・フラグを再掲しない）。
+- GitHub Pages は **Jekyll を使わず静的配信**する（`.github/workflows/jekyll-gh-pages.yml` がリポジトリを `_site` へコピーし `.nojekyll` を置く）。閲覧 UI は `index.html`＋`assets/`（Numbers Lore Viewer）で、**生の `.md` を fetch して描画する**ため、Jekyll でビルドしてはならない（`.md` が `.html` に変換され動作しなくなる。過去には引用内の `{{` による Liquid 構文エラーでビルド失敗も発生）。
+  - 数式は KaTeX auto-render で表示（`index.html` で読込、`assets/app.js` の `renderMathIn`）。
+  - ビューアーの検索インデックス `assets/numbers-index.json` は `tools/build_viewer_index.py` で生成する（`generate_numbers.py` 実行時に自動同期）。手編集しない。
+  - 生成物には Liquid 構文と誤認される `{{` / `{%` を含めない（`generate_numbers.py` が出力時に `{ {` / `{ %` へ無害化。将来 Jekyll 化する場合への備えとして維持）。
 
 ## 生成ワークフロー
 

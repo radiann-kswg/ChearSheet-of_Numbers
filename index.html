@@ -2,63 +2,73 @@
 <html lang="ja">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Numbers Lore Viewer</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&family=IBM+Plex+Mono:wght@400;600&display=swap"
-    rel="stylesheet">
-  <link rel="stylesheet" href="assets/app.css">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Numbers Lore Viewer</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&family=IBM+Plex+Mono:wght@400;600&display=swap"
+		rel="stylesheet">
+	<link rel="stylesheet" href="assets/app.css">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 </head>
 
 <body>
-  <div class="bg-shape bg-shape-a" aria-hidden="true"></div>
-  <div class="bg-shape bg-shape-b" aria-hidden="true"></div>
+	<div class="bg-shape bg-shape-a" aria-hidden="true"></div>
+	<div class="bg-shape bg-shape-b" aria-hidden="true"></div>
 
-  <header class="topbar">
-    <h1>CheatSheet of Numbers</h1>
-    <p>数字のいわれと性質を、種類別フィルタで探索できるGitHub Pagesビューアー</p>
-  </header>
+	<header class="topbar">
+		<h1>CheatSheet of Numbers</h1>
+		<p>数字のいわれと性質を、種類別フィルタで探索できるGitHub Pagesビューアー</p>
+	</header>
 
-  <main class="layout">
-    <aside class="sidebar" aria-label="数字一覧と検索条件">
-      <div class="sidebar-head">
-        <label for="search">検索</label>
-        <input id="search" type="search" placeholder="例: 57, 吉凶, フィボナッチ, angel">
-      </div>
+	<main class="layout">
+		<aside class="sidebar" aria-label="数字一覧と検索条件">
+			<div class="sidebar-head">
+				<label for="jump">番号を直接指定（0〜999）</label>
+				<div class="jump-row">
+					<input id="jump" type="number" min="0" max="999" inputmode="numeric" placeholder="例: 57">
+					<button id="jump-go" type="button">開く</button>
+				</div>
+				<label for="search">検索</label>
+				<input id="search" type="search" placeholder="例: 57, 吉凶, フィボナッチ, angel">
+			</div>
 
-      <section class="filter-block" aria-label="いわれカテゴリ">
-        <h2>いわれカテゴリ</h2>
-        <div id="lore-filters" class="chip-list"></div>
-      </section>
+			<div class="filter-scroll" aria-label="フィルタ">
+				<section class="filter-block" aria-label="いわれカテゴリ">
+					<h2>いわれカテゴリ</h2>
+					<div id="lore-filters" class="chip-list"></div>
+				</section>
 
-      <section class="filter-block" aria-label="性質カテゴリ">
-        <h2>性質カテゴリ</h2>
-        <div id="property-filters" class="chip-list"></div>
-      </section>
+				<section class="filter-block" aria-label="性質カテゴリ">
+					<h2>性質カテゴリ</h2>
+					<div id="property-filters" class="chip-list"></div>
+				</section>
+			</div>
 
-      <div class="sidebar-foot">
-        <button id="clear-filters" type="button">フィルタをクリア</button>
-        <p id="result-count">0件</p>
-      </div>
+			<div class="sidebar-foot">
+				<button id="clear-filters" type="button">フィルタをクリア</button>
+				<p id="result-count">0件</p>
+			</div>
 
-      <nav>
-        <ul id="doc-list" class="doc-list"></ul>
-      </nav>
-    </aside>
+			<nav class="doc-scroll" aria-label="数字の索引">
+				<ul id="doc-list" class="doc-list"></ul>
+			</nav>
+		</aside>
 
-    <section class="content" aria-live="polite">
-      <article id="doc-view" class="doc-view">
-        <p>左の一覧から数字を選択してください。</p>
-      </article>
-    </section>
-  </main>
+		<section class="content" aria-live="polite">
+			<article id="doc-view" class="doc-view">
+				<p>左の一覧から数字を選択してください。</p>
+			</article>
+		</section>
+	</main>
 
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
-  <script src="assets/app.js" defer></script>
+	<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+	<script src="assets/app.js" defer></script>
 </body>
 
 </html>
