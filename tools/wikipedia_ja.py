@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import html
 import json
 import math
 import re
@@ -393,6 +394,9 @@ def wikitext_to_plain_text(wikitext: str) -> str:
     text = re.sub(r"^[\*#;:]+\s*", "", text, flags=re.MULTILINE)
     # any remaining tags
     text = re.sub(r"<[^>]+>", " ", text)
+    # Decode HTML entities (e.g. &minus; / &times;) left by wiki markup or math
+    # templates. Applied twice to also resolve double-escaped entities (&amp;minus;).
+    text = html.unescape(html.unescape(text))
     return _clean_text(text)
 
 
@@ -417,6 +421,8 @@ def wikitext_to_plain_text_keep_newlines(wikitext: str) -> str:
     text = re.sub(r"^[\*#;:]+\s*", "", text, flags=re.MULTILINE)
     # any remaining tags
     text = re.sub(r"<[^>]+>", " ", text)
+    # Decode HTML entities (see wikitext_to_plain_text).
+    text = html.unescape(html.unescape(text))
     return _clean_text_preserve_newlines(text)
 
 

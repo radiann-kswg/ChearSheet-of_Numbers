@@ -4,6 +4,7 @@ import argparse
 from collections.abc import Sequence
 import math
 from dataclasses import dataclass
+import html
 import json
 import os
 from pathlib import Path
@@ -179,6 +180,87 @@ def _looks_like_number_wikipedia_intro(intro_extract: str) -> bool:
     return ("自然数" in intro_extract) or ("整数" in intro_extract)
 
 
+def _sanitize_excerpt(s: str) -> str:
+    """Clean cached Wikipedia excerpts before quoting.
+
+    - Decode HTML entities (&minus; / &times; ...) that may remain in older caches.
+    - Remove stub "( )" fragments left by stripped templates.
+    - Repair known template-stripping artifacts that create false equations,
+      e.g. "715 = 714と715は…" -> "714と715は…" / "57 = = 素数 p = 7 …" -> "素数 p = 7 …".
+    """
+
+    t = html.unescape(html.unescape(s))
+    t = re.sub(r"[（(]\s*[)）]", " ", t)
+    t = re.sub(r"^\s*\d+\s*=\s*(?=\d+\s*と)", "", t)
+    t = re.sub(r"^\s*\d+\s*=\s*=\s*", "", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _math_prefix_is_false(prefix: str) -> bool:
+    """Return True only when the prefix is a *pure-arithmetic* equation that is false.
+
+    Used as a publication gate: excerpts whose leading equation is provably wrong
+    (source typos or extraction damage) must not be published. Expressions with
+    variables (n, p, σ ...) cannot be judged and return False.
+    """
+
+    s = prefix.replace("×", "*").replace("÷", "/").replace("−", "-")
+    s = s.replace("^", "**").replace(" ", "")
+    if not re.fullmatch(r"[0-9+\-*/().=]+", s):
+        return False
+    parts = [q for q in s.split("=") if q]
+    if len(parts) < 2:
+        return False
+    try:
+        values = [_bounded_arith_eval(q) for q in parts]
+    except Exception:
+        return False
+    return any(abs(v - values[0]) > 1e-9 for v in values[1:])
+
+
+def _bounded_arith_eval(expr: str):
+    """Evaluate a small arithmetic expression with hard bounds.
+
+    eval() だと巨大な冪（例: 破損テキスト由来の 3**50**5）で停止するため、
+    AST を辿って値域を制限しながら評価する。
+    """
+
+    import ast
+
+    def _ev(node):
+        if isinstance(node, ast.Expression):
+            return _ev(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return node.value
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+            v = _ev(node.operand)
+            return -v if isinstance(node.op, ast.USub) else v
+        if isinstance(node, ast.BinOp):
+            left = _ev(node.left)
+            right = _ev(node.right)
+            if isinstance(node.op, ast.Add):
+                out = left + right
+            elif isinstance(node.op, ast.Sub):
+                out = left - right
+            elif isinstance(node.op, ast.Mult):
+                out = left * right
+            elif isinstance(node.op, ast.Div):
+                out = left / right
+            elif isinstance(node.op, ast.Pow):
+                if abs(right) > 64 or abs(left) > 10**9:
+                    raise ValueError("exponent out of bounds")
+                out = left ** right
+            else:
+                raise ValueError("unsupported operator")
+            if abs(out) > 10**18:
+                raise ValueError("value out of bounds")
+            return out
+        raise ValueError("unsupported expression")
+
+    return _ev(ast.parse(expr, mode="eval"))
+
+
 def _split_math_prefix(text: str) -> tuple[str, str] | None:
     """Split a Wikipedia excerpt into (math_like_prefix, remainder).
 
@@ -194,6 +276,10 @@ def _split_math_prefix(text: str) -> tuple[str, str] | None:
     s = text.strip()
     if not s:
         return None
+
+    # 上付き指数の平坦化（"2 2 + 4 2" ← 2²+4²）を修復する。
+    # 単一桁の指数が直後に演算子/等号/文末を伴う場合のみ対象。
+    s = re.sub(r"(\d+) (\d)(?=\s*[+\-−×÷=)]|$|\s+\d+[^\d\s])", r"\1^\2", s)
 
     def _is_japanese_char(ch: str) -> bool:
         code = ord(ch)
@@ -236,7 +322,32 @@ def _split_math_prefix(text: str) -> tuple[str, str] | None:
         return None
     if not re.search(r"[=^×÷√π]", prefix):
         return None
+
+    # 演算子を挟まずに数値項が連続する場合、後続は説明文の断片
+    # （例: "276 = 0^5 + 1^5 + 2^5 + 3^5 0^5を含めて…" の 2 つ目の 0^5）。
+    m_gap = re.search(r"(?<=[\d)]) +(?=\d)", prefix)
+    if m_gap:
+        remainder = prefix[m_gap.start():] + remainder
+        prefix = prefix[: m_gap.start()].rstrip()
+
+    # A completed equation followed by a fresh "<var> = ..." belongs to the
+    # explanation, not the formula (e.g. "57 = 2^6 − 2^3 + 1 n = 2 のときの…").
+    first_eq = prefix.find("=")
+    if first_eq != -1:
+        m2 = re.search(r"\s(?=[A-Za-z]\s*=)", prefix[first_eq + 1:])
+        if m2:
+            cut = first_eq + 1 + m2.start()
+            remainder = prefix[cut:] + remainder
+            prefix = prefix[:cut].rstrip()
+
+    # Reject fragments that would produce broken KaTeX.
+    if prefix.count("{") != prefix.count("}") or prefix.count("(") != prefix.count(")"):
+        return None
+    if prefix.endswith("=") or prefix.endswith("＝"):
+        return None
     if len(prefix) < 6:
+        return None
+    if not re.search(r"\d", prefix) or not re.search(r"[=^×÷√π]", prefix):
         return None
     return prefix, remainder
 
@@ -400,6 +511,95 @@ HTTP_STATUS_CODES_REPO_INDEX = (
     "https://github.com/radiann-kswg/CheatSheet-of_HttpResponceDataCode/blob/main/index.md"
 )
 LIST_7400_WIKIPEDIA_EN = "https://en.wikipedia.org/wiki/List_of_7400-series_integrated_circuits"
+
+HTTP_STATUS_CODES_REPO_BASE = (
+    "https://github.com/radiann-kswg/CheatSheet-of_HttpResponceDataCode/blob/main/status-codes/"
+)
+
+# 実在する HTTP ステータスコードのみを対象にする（IANA 登録コード＋主要実装の非標準コード）。
+# 値: (参照リポジトリ内の相対パス, MDN に個別ページがあるか)
+HTTP_STATUS_PAGES: dict[int, tuple[str, bool]] = {
+    100: ("1xx-information/100-continue.md", True),
+    101: ("1xx-information/101-switching-protocols.md", True),
+    102: ("1xx-information/102-processing.md", True),
+    103: ("1xx-information/103-early-hints.md", True),
+    104: ("1xx-information/104-upload-resumption-supported.md", False),
+    200: ("2xx-success/200-ok.md", True),
+    201: ("2xx-success/201-created.md", True),
+    202: ("2xx-success/202-accepted.md", True),
+    203: ("2xx-success/203-non-authoritative-information.md", True),
+    204: ("2xx-success/204-no-content.md", True),
+    205: ("2xx-success/205-reset-content.md", True),
+    206: ("2xx-success/206-partial-content.md", True),
+    207: ("2xx-success/207-multi-status.md", True),
+    208: ("2xx-success/208-already-reported.md", True),
+    226: ("2xx-success/226-im-used.md", True),
+    300: ("3xx-redirection/300-multiple-choices.md", True),
+    301: ("3xx-redirection/301-moved-permanently.md", True),
+    302: ("3xx-redirection/302-found.md", True),
+    303: ("3xx-redirection/303-see-other.md", True),
+    304: ("3xx-redirection/304-not-modified.md", True),
+    307: ("3xx-redirection/307-temporary-redirect.md", True),
+    308: ("3xx-redirection/308-permanent-redirect.md", True),
+    400: ("4xx-client-error/400-bad-request.md", True),
+    401: ("4xx-client-error/401-unauthorized.md", True),
+    402: ("4xx-client-error/402-payment-required.md", True),
+    403: ("4xx-client-error/403-forbidden.md", True),
+    404: ("4xx-client-error/404-not-found.md", True),
+    405: ("4xx-client-error/405-method-not-allowed.md", True),
+    406: ("4xx-client-error/406-not-acceptable.md", True),
+    407: ("4xx-client-error/407-proxy-authentication-required.md", True),
+    408: ("4xx-client-error/408-request-timeout.md", True),
+    409: ("4xx-client-error/409-conflict.md", True),
+    410: ("4xx-client-error/410-gone.md", True),
+    411: ("4xx-client-error/411-length-required.md", True),
+    412: ("4xx-client-error/412-precondition-failed.md", True),
+    413: ("4xx-client-error/413-content-too-large.md", True),
+    414: ("4xx-client-error/414-uri-too-long.md", True),
+    415: ("4xx-client-error/415-unsupported-media-type.md", True),
+    416: ("4xx-client-error/416-range-not-satisfiable.md", True),
+    417: ("4xx-client-error/417-expectation-failed.md", True),
+    418: ("4xx-client-error/418-im-a-teapot.md", True),
+    421: ("4xx-client-error/421-misdirected-request.md", True),
+    422: ("4xx-client-error/422-unprocessable-content.md", True),
+    423: ("4xx-client-error/423-locked.md", True),
+    424: ("4xx-client-error/424-failed-dependency.md", True),
+    425: ("4xx-client-error/425-too-early.md", True),
+    426: ("4xx-client-error/426-upgrade-required.md", True),
+    428: ("4xx-client-error/428-precondition-required.md", True),
+    429: ("4xx-client-error/429-too-many-requests.md", True),
+    431: ("4xx-client-error/431-request-header-fields-too-large.md", True),
+    451: ("4xx-client-error/451-unavailable-for-legal-reasons.md", True),
+    500: ("5xx-server-error/500-internal-server-error.md", True),
+    501: ("5xx-server-error/501-not-implemented.md", True),
+    502: ("5xx-server-error/502-bad-gateway.md", True),
+    503: ("5xx-server-error/503-service-unavailable.md", True),
+    504: ("5xx-server-error/504-gateway-timeout.md", True),
+    505: ("5xx-server-error/505-http-version-not-supported.md", True),
+    506: ("5xx-server-error/506-variant-also-negotiates.md", True),
+    507: ("5xx-server-error/507-insufficient-storage.md", True),
+    508: ("5xx-server-error/508-loop-detected.md", True),
+    510: ("5xx-server-error/510-not-extended.md", True),
+    511: ("5xx-server-error/511-network-authentication-required.md", True),
+    444: ("implementation-dependent/nginx-proprietary/444-connection-closed-without-response.md", False),
+    495: ("implementation-dependent/nginx-proprietary/495-client-certificate-verification-error.md", False),
+    496: ("implementation-dependent/nginx-proprietary/496-client-certificate-required.md", False),
+    497: ("implementation-dependent/nginx-proprietary/497-http-request-sent-to-https-port.md", False),
+    520: ("implementation-dependent/cloudflare-proprietary/520-web-server-returns-an-unknown-error.md", False),
+    521: ("implementation-dependent/cloudflare-proprietary/521-web-server-is-down.md", False),
+    522: ("implementation-dependent/cloudflare-proprietary/522-connection-timed-out.md", False),
+    523: ("implementation-dependent/cloudflare-proprietary/523-origin-is-unreachable.md", False),
+    524: ("implementation-dependent/cloudflare-proprietary/524-a-timeout-occurred.md", False),
+    525: ("implementation-dependent/cloudflare-proprietary/525-ssl-handshake-failed.md", False),
+    526: ("implementation-dependent/cloudflare-proprietary/526-invalid-ssl-certificate.md", False),
+    530: ("implementation-dependent/cloudflare-proprietary/530-origin-dns-error.md", False),
+    598: ("implementation-dependent/proxy-conventions/598-er-throttled-or-blocked.md", False),
+    599: ("implementation-dependent/proxy-conventions/599-er-context-unknown-error.md", False),
+}
+
+IANA_HTTP_STATUS_REGISTRY = (
+    "https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml"
+)
 
 
 # 代表的な 74xx の機能（シリーズ/メーカーで差異があるため、断定を避けて入口として提示）
@@ -753,6 +953,118 @@ def english_words_upto_999(n: int) -> str:
     return f"{EN_UNDER_20[hundreds]} hundred {english_words_upto_999(rest)}"
 
 
+# --- 追加の数学的性質（機械導出・Wolfram で集合を検算済み） ---
+
+_HIGHLY_COMPOSITE = {1, 2, 4, 6, 12, 24, 36, 48, 60, 120, 180, 240, 360, 720, 840}
+_FACTORIALS = {1, 2, 6, 24, 120, 720}
+_LUCAS = {2, 1, 3, 4, 7, 11, 18, 29, 47, 76, 123, 199, 322, 521, 843}
+_PELL = {1, 2, 5, 12, 29, 70, 169, 408, 985}
+_CATALAN = {1, 2, 5, 14, 42, 132, 429}
+
+
+def _is_palindrome_number(n: int) -> bool:
+    s = str(n)
+    return s == s[::-1]
+
+
+def _is_happy(n: int) -> bool:
+    seen: set[int] = set()
+    while n != 1 and n not in seen:
+        seen.add(n)
+        n = sum(int(c) ** 2 for c in str(n))
+    return n == 1
+
+
+def _prime_factor_shape(n: int) -> tuple[int, int]:
+    """Return (総素因数個数（重複含む）, 相異なる素因数の個数)."""
+    total = 0
+    distinct = 0
+    m = n
+    q = 2
+    while q * q <= m:
+        if m % q == 0:
+            distinct += 1
+            while m % q == 0:
+                total += 1
+                m //= q
+        q += 1
+    if m > 1:
+        total += 1
+        distinct += 1
+    return total, distinct
+
+
+def extra_math_properties(n: int) -> list[str]:
+    """よく知られた数の性質のうち、機械的に導出できるものを列挙する（0〜999）。"""
+
+    props: list[str] = []
+    if n < 1:
+        return props
+
+    prime = is_prime(n)
+    rev = int(str(n)[::-1])
+
+    if n >= 10 and _is_palindrome_number(n):
+        props.append("回文素数" if prime else "回文数")
+    if prime and rev != n and is_prime(rev):
+        props.append(f"エマープ（逆順の {rev} も素数）")
+    if prime:
+        if is_prime(n - 2) or is_prime(n + 2):
+            props.append("双子素数")
+        if is_prime(2 * n + 1):
+            props.append(f"ソフィー・ジェルマン素数（$2 \\times {n}+1={2 * n + 1}$ も素数）")
+        if n >= 5 and is_prime((n - 1) // 2) and (n - 1) % 2 == 0:
+            props.append(f"安全素数（$({n}-1)/2={(n - 1) // 2}$ も素数）")
+    else:
+        total, distinct = _prime_factor_shape(n)
+        if total == 2:
+            props.append("半素数（2つの素数の積）")
+        if total == 3 and distinct == 3:
+            props.append("楔数（相異なる3つの素数の積）")
+    ds = sum(int(c) for c in str(n))
+    if ds > 0 and n % ds == 0:
+        props.append(f"ハーシャッド数（各位の和 {ds} で割り切れる）")
+    if _is_happy(n):
+        props.append("ハッピー数")
+    if n in _HIGHLY_COMPOSITE:
+        props.append("高度合成数")
+    if n in _FACTORIALS:
+        props.append("階乗数")
+    if n in _LUCAS:
+        props.append("リュカ数")
+    if n in _PELL:
+        props.append("ペル数")
+    if n in _CATALAN:
+        props.append("カタラン数")
+    return props
+
+
+# --- Wolfram Knowledgebase 由来の科学データ（tools/wolfram_enrichment_v1.json） ---
+
+WOLFRAM_ENRICHMENT_PATH = Path(__file__).resolve().parent / "wolfram_enrichment_v1.json"
+_WOLFRAM_ENRICHMENT_CACHE: dict | None = None
+
+NGC_TYPE_JA = {
+    "Galaxy": "銀河",
+    "StarCluster": "星団",
+    "Nebula": "星雲",
+    "Star": "恒星（または星の重なり）",
+}
+
+NGC_LIST_URL = "https://en.wikipedia.org/wiki/List_of_NGC_objects_(1%E2%80%931000)"
+
+
+def _load_wolfram_enrichment() -> dict:
+    global _WOLFRAM_ENRICHMENT_CACHE
+    if _WOLFRAM_ENRICHMENT_CACHE is None:
+        try:
+            _WOLFRAM_ENRICHMENT_CACHE = json.loads(
+                WOLFRAM_ENRICHMENT_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            _WOLFRAM_ENRICHMENT_CACHE = {}
+    return _WOLFRAM_ENRICHMENT_CACHE
+
+
 def build_info(n: int) -> NumberInfo:
     factors = prime_factorization(n)
     factorization = format_factorization(n, factors)
@@ -958,6 +1270,11 @@ def render_number_page(
                 f"- **オイラーのトーシェント関数** $\\varphi({n})$: {info.totient}",
             ]
         )
+        extra_props = extra_math_properties(n)
+        if extra_props:
+            math_lines.append(
+                "- **その他の性質**: " + " / ".join(extra_props) + "（機械導出・検算済み）"
+            )
 
     science_lines: list[str] = []
     if info.atomic_element is not None:
@@ -965,6 +1282,30 @@ def render_number_page(
         science_lines.append(
             f"- **原子番号**: {info.atomic_element}（[元素](https://ja.wikipedia.org/wiki/{info.atomic_element})）"
         )
+
+    if n >= 1:
+        _enrich = _load_wolfram_enrichment()
+        _mp_name = (_enrich.get("minor_planets") or {}).get(str(n))
+        if _mp_name:
+            science_lines.append(
+                f"- **小惑星**: 小惑星番号 {n} の小惑星は「{_mp_name}」"
+                f"（一次情報: [JPL Small-Body Database](https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr={n})"
+                "。名称データ: Wolfram Knowledgebase）"
+            )
+        _ngc = _enrich.get("ngc") or {}
+        if _ngc:
+            _ngc_type = (_ngc.get("exceptions") or {}).get(
+                str(n), _ngc.get("default", "Galaxy"))
+            if _ngc_type == "?":
+                science_lines.append(
+                    f"- **天文（NGC）**: NGC {n} は同定が難しい・欠番とされることがある番号です"
+                    f"（[NGC天体一覧]({NGC_LIST_URL})参照）"
+                )
+            else:
+                science_lines.append(
+                    f"- **天文（NGC）**: NGC {n} は{NGC_TYPE_JA.get(_ngc_type, _ngc_type)}に分類される天体です"
+                    f"（[NGC天体一覧]({NGC_LIST_URL})参照。分類データ: Wolfram Knowledgebase）"
+                )
 
     if not science_lines:
         science_lines.append("- （要約可能な一次情報が見つかったら追記）")
@@ -975,6 +1316,10 @@ def render_number_page(
         f"- **日本語（読み）**: {info.jp_reading}",
         f"- **英語**: {info.en_words}",
     ]
+    if n >= 1:
+        culture_lines.append(
+            f"- **西暦**: [{n}年](https://ja.wikipedia.org/wiki/{n}%E5%B9%B4)（ユリウス暦）の出来事は Wikipedia 参照"
+        )
 
     wikipedia_points: list[str] = []
     # 可能な範囲で、Wikipedia「性質」を置き換え可能な“機械的に導ける要点”を入れる
@@ -986,7 +1331,7 @@ def render_number_page(
         wikipedia_points.append("- 合成数（Wikipediaの『性質』参照）")
 
     if info.is_mersenne:
-        wikipedia_points.append("- メルセンヌ数（$2^p-1$ 形）")
+        wikipedia_points.append("- メルセンヌ数（広義: $2^n-1$ 形。指数が素数とは限らない）")
     if info.is_square:
         wikipedia_points.append("- 平方数")
     if info.is_cube:
@@ -1041,10 +1386,16 @@ def render_number_page(
             for s in props_pairs:
                 if not isinstance(s, str) or not s.strip():
                     continue
-                excerpt = s.strip()
+                excerpt = _sanitize_excerpt(s)
                 excerpt = re.sub(r"^\(\s*\)\s*", "", excerpt)
                 excerpt = re.sub(
                     r"^[（(]\s*[0-9一二三四五六七八九十]*\s*[)）]\s*", "", excerpt)
+                if not excerpt:
+                    continue
+                _gate = _split_math_prefix(excerpt)
+                if _gate and _math_prefix_is_false(_gate[0]):
+                    # 数学的に誤りの等式（出典側の誤植や抽出破損）は掲載しない
+                    continue
                 omitted = False
                 if len(excerpt) > 140:
                     excerpt = excerpt[:140].rstrip() + "…"
@@ -1081,10 +1432,15 @@ def render_number_page(
         for s in other_pairs:
             if not isinstance(s, str) or not s.strip():
                 continue
-            excerpt = s.strip()
+            excerpt = _sanitize_excerpt(s)
             excerpt = re.sub(r"^\(\s*\)\s*", "", excerpt)
             excerpt = re.sub(
                 r"^[（(]\s*[0-9一二三四五六七八九十]*\s*[)）]\s*", "", excerpt)
+            if not excerpt:
+                continue
+            _gate = _split_math_prefix(excerpt)
+            if _gate and _math_prefix_is_false(_gate[0]):
+                continue
 
             # Avoid duplication with the dedicated Science section.
             if info.atomic_element is not None and "原子番号" in excerpt:
@@ -1141,16 +1497,38 @@ def render_number_page(
             wikidata_number_lines.append(f"- Wikidata: {item.url}{desc}")
 
     tech_code_lines: list[str] = []
-    # HTTP status code (100-599)
+    # HTTP status code (100-599): 実在するコードのみ詳細リンクを出力する
     if 100 <= n <= 599:
-        tech_code_lines.extend(
-            [
-                "### HTTP ステータスコード（該当する場合）",
-                f"- この数字は HTTP ステータスコードとして用いられることがあります（意味・典型例は要約し、一次情報へリンクします）。",
-                f"- MDN: https://developer.mozilla.org/ja/docs/Web/HTTP/Status/{n}",
-                f"- 参照（チートシート）: {HTTP_STATUS_CODES_REPO_INDEX}",
-            ]
-        )
+        http_entry = HTTP_STATUS_PAGES.get(n)
+        tech_code_lines.append("### HTTP ステータスコード（該当する場合）")
+        if http_entry is not None:
+            http_path, http_has_mdn = http_entry
+            if "implementation-dependent" in http_path:
+                tech_code_lines.append(
+                    "- この数字は、特定の実装（nginx / Cloudflare / プロキシ慣行など）で用いられる**非標準**の HTTP ステータスコードです（意味は要約し、一次情報へリンクします）。"
+                )
+            else:
+                tech_code_lines.append(
+                    "- この数字は HTTP ステータスコードとして用いられます（意味・典型例は要約し、一次情報へリンクします）。"
+                )
+            if http_has_mdn:
+                tech_code_lines.append(
+                    f"- MDN: https://developer.mozilla.org/ja/docs/Web/HTTP/Status/{n}"
+                )
+            tech_code_lines.append(
+                f"- 解説（チートシート）: {HTTP_STATUS_CODES_REPO_BASE}{http_path}"
+            )
+            tech_code_lines.append(
+                f"- 参照（チートシート目次）: {HTTP_STATUS_CODES_REPO_INDEX}"
+            )
+        else:
+            tech_code_lines.append(
+                "- この数字は、IANA 登録済みおよび主要実装の HTTP ステータスコードとしては割り当てられていません（RFC 9110 では未知のコードは同クラスの `x00` と等価に扱われます）。"
+            )
+            tech_code_lines.append(f"- IANA レジストリ: {IANA_HTTP_STATUS_REGISTRY}")
+            tech_code_lines.append(
+                f"- 参照（チートシート目次）: {HTTP_STATUS_CODES_REPO_INDEX}"
+            )
 
     if wikidata is not None:
         iso = wikidata.iso3166_numeric.get(n)
